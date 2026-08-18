@@ -20,17 +20,17 @@ export function TemplatesPanel() {
       return;
     }
     const supabase = createClient();
-    supabase
-      .from("templates")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data, error: loadError }) => {
-        if (loadError) {
-          setError(loadError.message);
-          return;
-        }
-        setTemplates((data ?? []) as TemplateRow[]);
-      });
+    void (async () => {
+      const result = await supabase
+        .from("templates")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (result.error) {
+        setError(result.error.message);
+        return;
+      }
+      setTemplates((result.data ?? []) as TemplateRow[]);
+    })();
   }, []);
 
   function openEditor(file?: File) {

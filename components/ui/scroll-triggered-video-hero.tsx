@@ -222,9 +222,10 @@ export default function CinematicWorkspace() {
       return;
     }
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      setEmail(data.user?.email ?? null);
-    });
+    void (async () => {
+      const session = await supabase.auth.getUser();
+      setEmail(session.data.user?.email ?? null);
+    })();
   }, [configured]);
 
   useEffect(() => {

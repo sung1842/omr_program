@@ -352,8 +352,8 @@ export default function TemplateEditor({ initial }: Props) {
     setMessage(null);
     try {
       const supabase = createClient();
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) {
+      const session = await supabase.auth.getUser();
+      if (session.error || !session.data.user) {
         throw new Error("로그인이 필요합니다.");
       }
       const payload = {
@@ -377,7 +377,7 @@ export default function TemplateEditor({ initial }: Props) {
       } else {
         const { error: insertError } = await supabase.from("templates").insert({
           ...payload,
-          created_by: userData.user.id,
+          created_by: session.data.user.id,
         });
         if (insertError) {
           throw insertError;

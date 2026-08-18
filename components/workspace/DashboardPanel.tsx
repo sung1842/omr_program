@@ -25,11 +25,11 @@ export function DashboardPanel({ active = true }: { active?: boolean }) {
       return;
     }
     const supabase = createClient();
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user?.id) {
+    const session = await supabase.auth.getUser();
+    if (!session.data.user?.id) {
       return;
     }
-    const nextTemplate = await ensureDefaultTemplate(userData.user.id);
+    const nextTemplate = await ensureDefaultTemplate(session.data.user.id);
     setTemplate(nextTemplate);
   }, []);
 
@@ -108,15 +108,15 @@ export function DashboardPanel({ active = true }: { active?: boolean }) {
       return;
     }
     const supabase = createClient();
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user?.id) {
+    const session = await supabase.auth.getUser();
+    if (!session.data.user?.id) {
       setError("로그인이 필요합니다.");
       return;
     }
     setResetting(true);
     setError(null);
     try {
-      await resetOmrWorkspace(userData.user.id);
+      await resetOmrWorkspace(session.data.user.id);
       setConfirmReset(false);
       await loadTemplate();
       await loadResults();

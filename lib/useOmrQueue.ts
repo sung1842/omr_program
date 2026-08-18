@@ -32,7 +32,7 @@ function selectedLabelCount(answers: Record<string, unknown> | null | undefined)
   if (!answers) {
     return 0;
   }
-  return Object.values(answers).reduce((total, value) => {
+  return Object.values(answers).reduce<number>((total, value) => {
     if (Array.isArray(value)) {
       return total + value.filter(Boolean).length;
     }
@@ -61,11 +61,10 @@ async function releaseCleanSources(
   }
   const keep = new Set(
     (data ?? [])
-      .filter(
-        (row) =>
-          row.status === "failed" || (row.status === "exception" && !row.reviewed_at),
-      )
-      .map((row) => row.source_path as string),
+      .filter((row: { status: string; reviewed_at: string | null; source_path: string | null }) => {
+        return row.status === "failed" || (row.status === "exception" && !row.reviewed_at);
+      })
+      .map((row: { source_path: string | null }) => row.source_path as string),
   );
   await removeScanSheets(
     supabase,

@@ -59,9 +59,10 @@ export function ExceptionPanel({ active = true }: { active?: boolean }) {
       return;
     }
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-    });
+    void (async () => {
+      const session = await supabase.auth.getUser();
+      setUserId(session.data.user?.id ?? null);
+    })();
     void load();
     const unsubscribe = onScanResultsChanged(() => {
       void load();

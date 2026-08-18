@@ -23,33 +23,24 @@ export function ScanPanel({ active: _active = true }: { active?: boolean }) {
       return;
     }
     const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data }) => {
-      const id = data.user?.id ?? null;
+    async function loadUserTemplate() {
+      const session = await supabase.auth.getUser();
+      const id = session.data.user?.id ?? null;
       setUserId(id);
       if (!id) {
+        setTemplate(null);
         return;
       }
       try {
         setTemplate(await ensureDefaultTemplate(id));
+        setError(null);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "기본 양식을 준비하지 못했습니다.");
       }
-    });
+    }
+    void loadUserTemplate();
     return onWorkspaceReset(() => {
-      supabase.auth.getUser().then(async ({ data }) => {
-        const id = data.user?.id ?? null;
-        setUserId(id);
-        if (!id) {
-          setTemplate(null);
-          return;
-        }
-        try {
-          setTemplate(await ensureDefaultTemplate(id));
-          setError(null);
-        } catch (loadError) {
-          setError(loadError instanceof Error ? loadError.message : "기본 양식을 준비하지 못했습니다.");
-        }
-      });
+      void loadUserTemplate();
     });
   }, []);
 
