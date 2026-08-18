@@ -1,0 +1,122 @@
+@import "tailwindcss";
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+
+:root {
+  --ui-scale: clamp(0.88, calc(100vw / 1440px), 1.18);
+  --paper: #f3eee4;
+  --paper-strong: #fffdf8;
+  --ink: #1c1917;
+  --muted: #6b6258;
+  --line: #d7cfc3;
+  --navy: #243044;
+  --navy-strong: #1a2436;
+  --mark: #9b2c2c;
+  --ok: #2f6b4f;
+  --warn: #9a6700;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-strong: var(--paper-strong);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-navy: var(--navy);
+  --color-navy-strong: var(--navy-strong);
+  --color-mark: var(--mark);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --font-sans: "Pretendard Variable", Pretendard, var(--font-noto), sans-serif;
+  --font-mono: var(--font-ibm);
+  --animate-orbit: orbit 20s linear infinite;
+  --animate-ripple: ripple 2.4s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.15s ease;
+  --animate-shimmer-slide: shimmer-slide var(--speed) ease-in-out infinite alternate;
+  --animate-spin-around: spin-around calc(var(--speed) * 2) infinite linear;
+}
+
+@keyframes orbit {
+  0% {
+    transform: rotate(0deg) translateX(var(--radius)) rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg) translateX(var(--radius)) rotate(-360deg);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes shimmer-slide {
+  to {
+    transform: translate(calc(100cqw - 100%), 0);
+  }
+}
+
+@keyframes spin-around {
+  0% {
+    transform: translateZ(0) rotate(0);
+  }
+  15%,
+  35% {
+    transform: translateZ(0) rotate(90deg);
+  }
+  65%,
+  85% {
+    transform: translateZ(0) rotate(270deg);
+  }
+  100% {
+    transform: translateZ(0) rotate(360deg);
+  }
+}
+@keyframes ripple {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+html {
+  background: #05070c;
+  font-size: calc(16px * var(--ui-scale));
+}
+
+body {
+  background: #05070c;
+  color: #f4f1ea;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: #67e8f9;
+  color: #05070c;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
