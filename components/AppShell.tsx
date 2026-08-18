@@ -12,11 +12,12 @@ const ICONS = [BarChart3, FileScan, ClipboardCheck];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const configured = hasSupabaseConfig();
+  const showLocalEnvHint =
+    process.env.NODE_ENV === "development" && !hasSupabaseConfig();
 
   return (
     <div className="h-dvh overflow-hidden bg-black text-white">
-      {!configured ? (
+      {showLocalEnvHint ? (
         <div className="relative z-[60] border-b border-red-400/30 bg-red-950/85 px-4 py-3 text-sm text-red-100 sm:px-6">
           `.env.local`에 `NEXT_PUBLIC_SUPABASE_URL`과 `NEXT_PUBLIC_SUPABASE_ANON_KEY`를
           설정한 뒤 개발 서버를 다시 시작하세요.
