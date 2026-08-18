@@ -55,7 +55,7 @@ export function resultKind(row: ScanResultRow): "valid" | "exception" | "failed"
     return "exception";
   }
   const details = readDetails(row.details);
-  if (details.sheet_status === "exception" || row.error_code === "RULE_OVERFLOW" || row.error_code === "MARK_GEOMETRY") {
+  if (details.sheet_status === "exception" || row.error_code === "RULE_OVERFLOW" || row.error_code === "MARK_GEOMETRY" || row.error_code === "RULE_EMPTY") {
     return "exception";
   }
   return "valid";
@@ -67,7 +67,7 @@ export function exceptionSummary(row: ScanResultRow) {
   }
   const reasons = readDetails(row.details).exception_reasons ?? [];
   if (reasons.length === 0) {
-    return row.error_code === "MARK_GEOMETRY" ? "기표 칸 침범" : "선택 한도 초과";
+    return row.error_code === "MARK_GEOMETRY" ? "기표 칸 침범" : row.error_code === "RULE_EMPTY" ? "선택이 없습니다" : "선택 한도 초과";
   }
   return reasons.map((reason) => reason.message).join(" / ");
 }

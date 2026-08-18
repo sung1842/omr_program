@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import {
   answersFromSelection,
@@ -14,33 +14,39 @@ import {
   type SelectionMap,
 } from "@/lib/exceptionReview";
 import { VILLAGE_AGENDA_FORM } from "@/lib/formSpec";
-import { exceptionSummary } from "@/lib/results";
-import { signedSheetUrl } from "@/lib/sheetStorage";
+import { isPdfPath, signedSheetUrl, removeScanSheet } from "@/lib/sheetStorage";
+import { onScanResultsChanged, emitScanResultsChanged } from "@/lib/scanEvents";
 import { createClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import type { ScanResultRow } from "@/lib/types";
 
 type Tab = "queue" | "log";
 
-export function ExceptionPanel() {
+export function ExceptionPanel({ active = true }: { active?: boolean }) {
   const [tab, setTab] = useState<Tab>("queue");
   const [rows, setRows] = useState<ScanResultRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selection, setSelection] = useState<SelectionMap>(selectionFromAnswers(null));
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<"actual" | "fit">("actual");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
+  const loadGen = useRef(0);
   const load = useCallback(async () => {
     if (!hasSupabaseConfig()) {
       return;
     }
+    const gen = ++loadGen.current;
     const supabase = createClient();
     const { data, error: loadError } = await supabase
       .from("scan_results")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(400);
+      .limit(10000);
+    if (gen !== loadGen.current) {
+      return;
+    }
     if (loadError) {
       setError(loadError.message);
       return;
@@ -57,12 +63,37 @@ export function ExceptionPanel() {
       setUserId(data.user?.id ?? null);
     });
     void load();
+    const unsubscribe = onScanResultsChanged(() => {
+      void load();
+    });
+    const channel = supabase
+      .channel("scan-results-exceptions")
+      .on("postgres_changes", { event: "*", schema: "public", table: "scan_results" }, () => {
+        void load();
+      })
+      .subscribe();
+    return () => {
+      unsubscribe();
+      void supabase.removeChannel(channel);
+    };
   }, [load]);
+
+  useEffect(() => {
+    if (active) {
+      void load();
+    }
+  }, [active, load]);
 
   const pending = useMemo(() => rows.filter(isPendingException), [rows]);
   const logs = useMemo(() => rows.filter(isExceptionLog), [rows]);
   const list = tab === "queue" ? pending : logs;
   const selected = list.find((row) => row.id === selectedId) ?? list[0] ?? null;
+
+  const viewPath = selected?.source_path ?? selected?.image_path ?? null;
+  const isPdf = isPdfPath(viewPath);
+  const pdfUrl = imageUrl
+    ? `${imageUrl}#page=${selected?.source_page ?? 1}&view=FitH`
+    : null;
 
   useEffect(() => {
     if (!selected) {
@@ -72,13 +103,13 @@ export function ExceptionPanel() {
     }
     setSelectedId(selected.id);
     setSelection(selectionFromAnswers(selected.answers));
-    if (!hasSupabaseConfig() || !selected.image_path) {
+    if (!hasSupabaseConfig() || !viewPath) {
       setImageUrl(null);
       return;
     }
     const supabase = createClient();
-    signedSheetUrl(supabase, selected.image_path).then(setImageUrl);
-  }, [selected?.id, selected?.image_path, selected?.answers]);
+    signedSheetUrl(supabase, viewPath).then(setImageUrl);
+  }, [selected?.id, viewPath, selected?.answers]);
 
   const limitError = tab === "queue" ? selectionLimitError(selection) : null;
 
@@ -116,6 +147,9 @@ export function ExceptionPanel() {
       },
     };
     const { error: saveError } = await supabase.from("scan_results").update(payload).eq("id", selected.id);
+    if (!saveError) {
+      await releaseReviewedSource(supabase, selected);
+    }
     setSaving(false);
     if (saveError) {
       setError(
@@ -125,6 +159,7 @@ export function ExceptionPanel() {
       );
       return;
     }
+    emitScanResultsChanged();
     await load();
   }
 
@@ -176,7 +211,7 @@ export function ExceptionPanel() {
                       <span className="text-[10px] text-white/45">
                         {tab === "log"
                           ? `${reviewActionLabel(row)} · ${formatTime(row.reviewed_at)}`
-                          : exceptionSummary(row)}
+                          : formatTime(row.created_at)}
                       </span>
                     </button>
                   </li>
@@ -198,22 +233,66 @@ export function ExceptionPanel() {
                   <h4 className="truncate text-sm font-medium">{selected.filename}</h4>
                   <p className="text-[10px] text-white/45">{formatTime(selected.created_at)}</p>
                 </div>
-                <p className="mt-1 text-[11px] text-amber-200">{exceptionSummary(selected)}</p>
-                <div className="mt-3 overflow-hidden rounded-lg border border-white/10 bg-black/40">
-                  {imageUrl ? (
-                    <a href={imageUrl} target="_blank" rel="noreferrer">
-                      <img
-                        src={imageUrl}
-                        alt={selected.filename}
-                        className="mx-auto max-h-[22rem] w-full object-contain"
-                      />
+                {imageUrl ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px]">
+                    {isPdf ? (
+                      <span className="rounded border border-white/15 px-2 py-1 text-white/60">
+                        업로드 원본 PDF · {selected.source_page ?? 1}쪽
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setZoom("actual")}
+                          className={`rounded px-2 py-1 ${zoom === "actual" ? "bg-white text-black" : "border border-white/15 text-white/60"}`}
+                        >
+                          원본 크기
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setZoom("fit")}
+                          className={`rounded px-2 py-1 ${zoom === "fit" ? "bg-white text-black" : "border border-white/15 text-white/60"}`}
+                        >
+                          화면 맞춤
+                        </button>
+                      </>
+                    )}
+                    <a
+                      href={pdfUrl ?? imageUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded border border-white/15 px-2 py-1 text-cyan-200"
+                    >
+                      새 탭에서 열기
                     </a>
-                  ) : (
-                    <p className="px-4 py-10 text-center text-xs text-white/45">
-                      {selected.image_path
-                        ? "이미지를 불러오지 못했습니다."
-                        : "이 장은 이미지가 저장되지 않았습니다. 마이그레이션 적용 후 다시 스캔하면 원본이 보입니다."}
+                  </div>
+                ) : null}
+                <div
+                  className={`mt-2 rounded-lg border border-white/10 bg-zinc-200 ${
+                    isPdf ? "" : "max-h-[min(72dvh,50rem)] overflow-auto"
+                  }`}
+                >
+                  {!imageUrl ? (
+                    <p className="px-4 py-10 text-center text-xs text-zinc-700">
+                      {viewPath
+                        ? "원본을 불러오지 못했습니다."
+                        : selected.reviewed_at
+                          ? "처리가 끝나 보관본은 삭제했습니다."
+                          : "이 장은 보관본이 없습니다. 다시 스캔하면 원본이 보입니다."}
                     </p>
+                  ) : isPdf ? (
+                    <iframe
+                      key={pdfUrl ?? undefined}
+                      src={pdfUrl ?? undefined}
+                      title={selected.filename}
+                      className="block h-[min(72dvh,50rem)] w-full rounded-lg"
+                    />
+                  ) : (
+                    <img
+                      src={imageUrl}
+                      alt={selected.filename}
+                      className={zoom === "actual" ? "block h-auto w-auto max-w-none" : "block h-auto w-full"}
+                    />
                   )}
                 </div>
               </div>
@@ -232,7 +311,10 @@ export function ExceptionPanel() {
                       <legend className="px-1 text-xs font-medium">
                         {question.label}
                         <span className="ml-2 font-normal text-white/45">
-                          {question.max_select === 1 ? "0 또는 1개" : `0~${question.max_select}개`} · {chosen.length}개
+                          {question.min_select === question.max_select
+                            ? `${question.max_select}개`
+                            : `${question.min_select}~${question.max_select}개`}{" "}
+                          · {chosen.length}개
                         </span>
                       </legend>
                       <ul className="mt-2 space-y-1.5">
@@ -290,6 +372,33 @@ export function ExceptionPanel() {
       </div>
     </div>
   );
+}
+
+/**
+ * Detaches the reviewed row from its stored original and deletes the file once no
+ * other page of the same upload still needs it.
+ */
+async function releaseReviewedSource(
+  supabase: ReturnType<typeof createClient>,
+  row: ScanResultRow,
+) {
+  await supabase
+    .from("scan_results")
+    .update({ image_path: null, source_path: null })
+    .eq("id", row.id);
+  await removeScanSheet(supabase, row.image_path);
+  if (!row.source_path) {
+    return;
+  }
+  const { data, error } = await supabase
+    .from("scan_results")
+    .select("id")
+    .eq("source_path", row.source_path)
+    .limit(1);
+  if (error || (data ?? []).length > 0) {
+    return;
+  }
+  await removeScanSheet(supabase, row.source_path);
 }
 
 function TabButton({

@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { OmrRequestError, recognizeSheet } from "@/lib/omrClient";
 import { isPdfFile, loadPdfPagesAsFiles } from "@/lib/loadFormImage";
-import { uploadScanSheet } from "@/lib/sheetStorage";
+import { emitScanResultsChanged, onWorkspaceReset } from "@/lib/scanEvents";
+import { removeScanSheets, uploadSourceFile } from "@/lib/sheetStorage";
 import { createClient } from "@/lib/supabase/client";
 import type { ExceptionReason, QueueItem, ScanResultStatus, TemplateRow } from "@/lib/types";
 
@@ -11,6 +12,64 @@ function isImageFile(file: File) {
   return (
     file.type.startsWith("image/") ||
     /\.(png|jpe?g|webp|tif{1,2}|bmp)$/i.test(file.name)
+  );
+}
+
+/** One storage path per uploaded file, so a retry overwrites instead of piling up copies. */
+const sourceIds = new WeakMap<File, string>();
+
+function sourceIdOf(file: File) {
+  const existing = sourceIds.get(file);
+  if (existing) {
+    return existing;
+  }
+  const next = crypto.randomUUID();
+  sourceIds.set(file, next);
+  return next;
+}
+
+function selectedLabelCount(answers: Record<string, unknown> | null | undefined) {
+  if (!answers) {
+    return 0;
+  }
+  return Object.values(answers).reduce((total, value) => {
+    if (Array.isArray(value)) {
+      return total + value.filter(Boolean).length;
+    }
+    return total + (value ? 1 : 0);
+  }, 0);
+}
+
+/**
+ * Drops stored originals once every page from them landed cleanly. A multi-page PDF
+ * stays until its last unreviewed exception or failure is gone.
+ */
+async function releaseCleanSources(
+  supabase: ReturnType<typeof createClient>,
+  sourcePaths: Map<File, string | null>,
+) {
+  const paths = Array.from(new Set(Array.from(sourcePaths.values()).filter(Boolean) as string[]));
+  if (paths.length === 0) {
+    return;
+  }
+  const { data, error } = await supabase
+    .from("scan_results")
+    .select("source_path, status, reviewed_at")
+    .in("source_path", paths);
+  if (error) {
+    return;
+  }
+  const keep = new Set(
+    (data ?? [])
+      .filter(
+        (row) =>
+          row.status === "failed" || (row.status === "exception" && !row.reviewed_at),
+      )
+      .map((row) => row.source_path as string),
+  );
+  await removeScanSheets(
+    supabase,
+    paths.filter((path) => !keep.has(path)),
   );
 }
 
@@ -24,6 +83,15 @@ export function useOmrQueue() {
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
+
+  useEffect(() => {
+    return onWorkspaceReset(() => {
+      runningRef.current = false;
+      setRunning(false);
+      setPreparing(null);
+      setItems([]);
+    });
+  }, []);
 
   const updateItem = useCallback((id: string, patch: Partial<QueueItem>) => {
     setItems((current) =>
@@ -52,6 +120,8 @@ export function useOmrQueue() {
             next.push({
               id: crypto.randomUUID(),
               file,
+              source: file,
+              sourcePage: 1,
               filename: file.name,
               status: "failed",
               attempts: 0,
@@ -60,19 +130,23 @@ export function useOmrQueue() {
             });
             continue;
           }
-          for (const page of pages) {
+          pages.forEach((page, index) => {
             next.push({
               id: crypto.randomUUID(),
               file: page,
+              source: file,
+              sourcePage: index + 1,
               filename: page.name,
               status: "pending",
               attempts: 0,
             });
-          }
+          });
         } catch (error) {
           next.push({
             id: crypto.randomUUID(),
             file,
+            source: file,
+            sourcePage: 1,
             filename: file.name,
             status: "failed",
             attempts: 0,
@@ -121,28 +195,50 @@ export function useOmrQueue() {
         throw jobError;
       }
 
+      // Store every upload untouched before recognition runs. Whatever happens next,
+      // an exception always has the original bytes to show.
+      const sourcePaths = new Map<File, string | null>();
+      const sources = Array.from(new Set(targets.map((item) => item.source)));
+      for (let index = 0; index < sources.length; index += 1) {
+        setPreparing(`원본 보관 중 ${index + 1}/${sources.length}...`);
+        const source = sources[index];
+        sourcePaths.set(
+          source,
+          await uploadSourceFile(supabase, userId, sourceIdOf(source), source),
+        );
+      }
+      setPreparing(null);
+
       let successCount = 0;
       let exceptionCount = 0;
       let failedCount = 0;
 
       for (const item of targets) {
+        const sourcePath = sourcePaths.get(item.source) ?? null;
+        const sourceColumns: { source_path: string | null; source_page: number | null } = {
+          source_path: sourcePath,
+          source_page: sourcePath ? item.sourcePage : null,
+        };
         updateItem(item.id, { status: "processing", attempts: item.attempts + 1 });
         try {
           const result = await recognizeSheet(item.file, template);
           const reasons = (result.exception_reasons ?? []) as ExceptionReason[];
-          const isException = result.sheet_status === "exception" || reasons.length > 0;
+          const emptySheet = selectedLabelCount(result.answers) === 0;
+          if (emptySheet && !reasons.some((reason) => reason.kind === "empty")) {
+            reasons.push({
+              number: "",
+              label: "용지",
+              selected_count: 0,
+              max_select: 0,
+              kind: "empty",
+              message: "선택이 없습니다",
+            });
+          }
+          const isException = result.sheet_status === "exception" || reasons.length > 0 || emptySheet;
           const status: ScanResultStatus = isException ? "exception" : "success";
           const reasonText = reasons.map((reason) => reason.message).join(" / ");
-          const geometry = reasons.some((reason) => reason.kind === "geometry");
-          const errorCode = isException
-            ? geometry
-              ? "MARK_GEOMETRY"
-              : "RULE_OVERFLOW"
-            : null;
+          const errorCode = isException ? (emptySheet ? "RULE_EMPTY" : "RULE_OVERFLOW") : null;
           const resultId = crypto.randomUUID();
-          const imagePath = isException
-            ? await uploadScanSheet(supabase, userId, resultId, item.file)
-            : null;
           const payload = {
             id: resultId,
             job_id: job.id,
@@ -150,17 +246,22 @@ export function useOmrQueue() {
             filename: item.filename,
             status,
             answers: result.answers,
-            details: result.details,
+            details: {
+              ...(typeof result.details === "object" && result.details ? result.details : {}),
+              sheet_status: isException ? "exception" : "ok",
+              exception_reasons: reasons,
+            },
             error_code: errorCode,
-            error_message: isException ? reasonText || "선택 한도 초과" : null,
+            error_message: isException ? reasonText || "선택이 없습니다" : null,
             created_by: userId,
-            ...(imagePath ? { image_path: imagePath } : {}),
+            ...sourceColumns,
           };
           let { error } = await supabase.from("scan_results").insert(payload);
-          if (error && imagePath) {
-            const withoutImage = { ...payload };
-            delete withoutImage.image_path;
-            ({ error } = await supabase.from("scan_results").insert(withoutImage));
+          if (error && sourcePath) {
+            const withoutSource = { ...payload };
+            delete (withoutSource as Record<string, unknown>).source_path;
+            delete (withoutSource as Record<string, unknown>).source_page;
+            ({ error } = await supabase.from("scan_results").insert(withoutSource));
           }
           if (error && status === "exception") {
             ({ error } = await supabase.from("scan_results").insert({
@@ -171,13 +272,14 @@ export function useOmrQueue() {
           if (error) {
             throw error;
           }
+          emitScanResultsChanged();
           if (isException) {
             exceptionCount += 1;
             updateItem(item.id, {
               status: "exception",
               answers: result.answers,
               errorCode: errorCode ?? "RULE_OVERFLOW",
-              errorMessage: reasonText || "선택 한도 초과",
+              errorMessage: reasonText || "선택이 없습니다",
             });
           } else {
             successCount += 1;
@@ -206,14 +308,18 @@ export function useOmrQueue() {
             error_code: requestError.code,
             error_message: requestError.message,
             created_by: userId,
+            ...sourceColumns,
           });
           updateItem(item.id, {
             status: "failed",
             errorCode: requestError.code,
             errorMessage: requestError.message,
           });
+          emitScanResultsChanged();
         }
       }
+
+      await releaseCleanSources(supabase, sourcePaths);
 
       const { error: jobUpdateError } = await supabase
         .from("scan_jobs")
@@ -235,6 +341,7 @@ export function useOmrQueue() {
 
       runningRef.current = false;
       setRunning(false);
+      emitScanResultsChanged();
     },
     [updateItem],
   );

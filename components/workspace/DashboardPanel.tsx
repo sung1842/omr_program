@@ -1,69 +1,132 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { downloadResultsXlsx } from "@/lib/excel";
 import { isPendingException } from "@/lib/exceptionReview";
-import { countOptions, exceptionSummary, normalizeQuestion, resultKind } from "@/lib/results";
 import { ensureDefaultTemplate } from "@/lib/ensureDefaultTemplate";
+import { countOptions, normalizeQuestion, resultKind } from "@/lib/results";
+import { onScanResultsChanged, onWorkspaceReset } from "@/lib/scanEvents";
+import { resetOmrWorkspace } from "@/lib/resetWorkspace";
 import { createClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import type { ScanResultRow, TemplateRow } from "@/lib/types";
-import { pickDefaultTemplateId } from "@/lib/workspace";
 
-export function DashboardPanel() {
-  const [templates, setTemplates] = useState<TemplateRow[]>([]);
-  const [templateId, setTemplateId] = useState<string>("");
+export function DashboardPanel({ active = true }: { active?: boolean }) {
+  const [template, setTemplate] = useState<TemplateRow | null>(null);
   const [results, setResults] = useState<ScanResultRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const loadGen = useRef(0);
 
-  useEffect(() => {
+  const loadTemplate = useCallback(async () => {
     if (!hasSupabaseConfig()) {
       return;
     }
     const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (data.user?.id) {
-        try {
-          await ensureDefaultTemplate(data.user.id);
-        } catch {
-          // listing can still proceed
-        }
-      }
-      const { data: rows, error: loadError } = await supabase
-        .from("templates")
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user?.id) {
+      return;
+    }
+    const nextTemplate = await ensureDefaultTemplate(userData.user.id);
+    setTemplate(nextTemplate);
+  }, []);
+
+  const loadResults = useCallback(async () => {
+    if (!hasSupabaseConfig()) {
+      return;
+    }
+    const gen = ++loadGen.current;
+    const supabase = createClient();
+    try {
+      const { data, error: loadError } = await supabase
+        .from("scan_results")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(10000);
+      if (gen !== loadGen.current) {
+        return;
+      }
       if (loadError) {
         setError(loadError.message);
         return;
       }
-      const list = (rows ?? []) as TemplateRow[];
-      setTemplates(list);
-      setTemplateId(pickDefaultTemplateId(list));
-    });
+      setError(null);
+      setResults((data ?? []) as ScanResultRow[]);
+    } catch (loadError) {
+      if (gen !== loadGen.current) {
+        return;
+      }
+      setError(loadError instanceof Error ? loadError.message : "현황을 불러오지 못했습니다.");
+    }
   }, []);
 
   useEffect(() => {
-    if (!templateId || !hasSupabaseConfig()) {
+    void loadTemplate();
+    void loadResults();
+    const unsubscribe = onScanResultsChanged(() => {
+      void loadResults();
+    });
+    const unsubscribeReset = onWorkspaceReset(() => {
+      void loadTemplate();
+      void loadResults();
+    });
+    if (!hasSupabaseConfig()) {
+      return () => {
+        unsubscribe();
+        unsubscribeReset();
+      };
+    }
+    const supabase = createClient();
+    const channel = supabase
+      .channel("scan-results-dashboard")
+      .on("postgres_changes", { event: "*", schema: "public", table: "scan_results" }, () => {
+        void loadResults();
+      })
+      .subscribe();
+    return () => {
+      unsubscribe();
+      unsubscribeReset();
+      void supabase.removeChannel(channel);
+    };
+  }, [loadTemplate, loadResults]);
+
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    void loadResults();
+    const timer = window.setInterval(() => {
+      void loadResults();
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [active, loadResults]);
+
+  async function handleReset() {
+    if (!hasSupabaseConfig() || resetting) {
       return;
     }
     const supabase = createClient();
-    supabase
-      .from("scan_results")
-      .select("*")
-      .eq("template_id", templateId)
-      .order("created_at", { ascending: false })
-      .then(({ data, error: loadError }) => {
-        if (loadError) {
-          setError(loadError.message);
-          return;
-        }
-        setResults((data ?? []) as ScanResultRow[]);
-      });
-  }, [templateId]);
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user?.id) {
+      setError("로그인이 필요합니다.");
+      return;
+    }
+    setResetting(true);
+    setError(null);
+    try {
+      await resetOmrWorkspace(userData.user.id);
+      setConfirmReset(false);
+      await loadTemplate();
+      await loadResults();
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : "초기화에 실패했습니다.");
+    } finally {
+      setResetting(false);
+    }
+  }
 
-  const template = templates.find((item) => item.id === templateId);
   const valid = results.filter((row) => resultKind(row) === "valid");
   const exceptions = results.filter(isPendingException);
   const failed = results.filter((row) => resultKind(row) === "failed");
@@ -89,13 +152,46 @@ export function DashboardPanel() {
           <p className="font-mono text-[0.5625rem] tracking-[0.2em] text-white/45">DASHBOARD</p>
           <h3 className="text-base font-semibold">집계 현황</h3>
         </div>
-        <ShimmerButton
-          disabled={!template || results.length === 0}
-          className="shadow-lg"
-          onClick={() => template && downloadResultsXlsx(template.name, template.questions, results)}
-        >
-          엑셀
-        </ShimmerButton>
+        <div className="flex items-center gap-2">
+          {confirmReset ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="max-w-44 text-[0.625rem] leading-4 text-amber-100/80">
+                집계·예외·업로드 파일을 모두 지웁니다. 양식은 기본값으로 다시 만듭니다.
+              </p>
+              <button
+                type="button"
+                disabled={resetting}
+                onClick={() => void handleReset()}
+                className="rounded-full bg-red-500 px-2.5 py-1 text-[0.625rem] font-semibold text-white hover:bg-red-400 disabled:opacity-50"
+              >
+                {resetting ? "지우는 중..." : "확인"}
+              </button>
+              <button
+                type="button"
+                disabled={resetting}
+                onClick={() => setConfirmReset(false)}
+                className="rounded-full px-2.5 py-1 text-[0.625rem] text-white/60 hover:bg-white/10"
+              >
+                취소
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmReset(true)}
+              className="rounded-full border border-white/15 px-2.5 py-1 text-[0.625rem] text-white/70 hover:bg-white/10 hover:text-white"
+            >
+              초기화
+            </button>
+          )}
+          <ShimmerButton
+            disabled={!template || results.length === 0}
+            className="shadow-lg"
+            onClick={() => template && downloadResultsXlsx(template.name, template.questions, results)}
+          >
+            엑셀
+          </ShimmerButton>
+        </div>
       </div>
 
       {error ? <p className="text-xs text-red-300">{error}</p> : null}
@@ -107,7 +203,7 @@ export function DashboardPanel() {
         <StatCard label="문항 그룹" value={template?.questions.length ?? 0} hint="기본 양식" />
       </section>
 
-      {templates.length === 0 ? (
+      {!template ? (
         <p className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">
           기본 양식을 아직 준비하지 못했습니다. 잠시 후 다시 열어 주세요.
         </p>
@@ -157,7 +253,6 @@ export function DashboardPanel() {
             {exceptions.map((row) => (
               <li key={row.id}>
                 <span className="font-medium">{row.filename}</span>
-                <span className="text-amber-200"> — {exceptionSummary(row)}</span>
               </li>
             ))}
           </ul>

@@ -357,7 +357,7 @@ export default function CinematicWorkspace() {
                 data-panel-scroll
                 className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto rounded-2xl border border-white/12 bg-black/50 p-4 shadow-2xl backdrop-blur-xl scrollbar-none"
               >
-                <Panel />
+                <Panel active={active} />
               </div>
             </motion.div>
           );

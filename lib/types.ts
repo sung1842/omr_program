@@ -36,7 +36,7 @@ export type OptionROI = RelRect & {
   id: string;
   label: string;
   title?: string;
-  /** Printed circle inside the 기표란 cell. If omitted, the backend estimates it. */
+  /** Printed circle inside the 기표란 cell. Fixed overlay coordinates; do not re-detect. */
   circle?: RelRect;
 };
 
@@ -75,7 +75,11 @@ export type AnswerMap = Record<string, string | string[] | null>;
 
 export type QueueItem = {
   id: string;
+  /** Page image handed to the recognizer. */
   file: File;
+  /** Untouched upload this page came from, kept for human review. */
+  source: File;
+  sourcePage: number;
   filename: string;
   status: QueueStatus;
   attempts: number;
@@ -98,6 +102,8 @@ export type ScanResultRow = {
   error_message: string | null;
   created_at: string;
   image_path?: string | null;
+  source_path?: string | null;
+  source_page?: number | null;
   reviewed_at?: string | null;
   reviewed_by?: string | null;
 };
@@ -108,7 +114,7 @@ export type ExceptionReason = {
   selected_count: number;
   max_select: number;
   message: string;
-  kind?: "count" | "geometry";
+  kind?: "count" | "geometry" | "empty";
   option_label?: string;
 };
 

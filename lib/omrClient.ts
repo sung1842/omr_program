@@ -48,7 +48,7 @@ export async function recognizeSheet(
       markers: template.markers,
       questions: template.questions,
       fill_threshold: template.fill_threshold,
-      auto_mark_cells: template.auto_mark_cells !== false,
+      auto_mark_cells: false,
     },
   });
 

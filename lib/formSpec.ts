@@ -18,8 +18,8 @@ export type FormQuestionDef = {
 export const VILLAGE_AGENDA_FORM = {
   name: "2027 신사2동 마을의제 선정 투표",
   marker_shape: "square" as const,
-  /** Sheet-relative hole delta: selected if hole darker than median(empty) + this. */
-  fill_threshold: 0.012,
+  /** Circle-hole blackness. 0.28 catches scribbles; raise if empty rings fire. */
+  fill_threshold: 0.28,
   questions: [
     {
       number: 1,

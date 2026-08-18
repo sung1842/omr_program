@@ -30,7 +30,16 @@ export async function loadPdfPagesAsFiles(
 ): Promise<File[]> {
   const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const pdf = await pdfjs.getDocument({
+    data: new Uint8Array(await file.arrayBuffer()),
+    // Hangul in these ballots comes from CID-keyed fonts, so pdf.js needs the packed
+    // CMaps and the standard font data or it draws the lines and drops every glyph.
+    cMapUrl: "/pdfjs/cmaps/",
+    cMapPacked: true,
+    standardFontDataUrl: "/pdfjs/standard_fonts/",
+    // Filled marks live on a CCITT overlay. pdf.js 6 decodes it with jbig2.wasm.
+    wasmUrl: "/pdfjs/wasm/",
+  }).promise;
   const base = file.name.replace(/\.pdf$/i, "") || "scan";
   const pages: File[] = [];
   for (let number = 1; number <= pdf.numPages; number += 1) {
@@ -52,8 +61,7 @@ export async function loadPdfPagesAsFiles(
 async function renderPdfPage(pdf: { getPage: (n: number) => Promise<any> }, number: number) {
   const page = await pdf.getPage(number);
   const base = page.getViewport({ scale: 1 });
-  // Match later OMR compress (1800px). Rendering at 2400 then shrinking was wasted time.
-  const scale = Math.min(1.8, 1800 / Math.max(base.width, base.height));
+  const scale = Math.min(2.5, 2800 / Math.max(base.width, base.height));
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(viewport.width));
@@ -62,7 +70,16 @@ async function renderPdfPage(pdf: { getPage: (n: number) => Promise<any> }, numb
   if (!context) {
     throw new Error("PDF를 그릴 수 없습니다.");
   }
-  await page.render({ canvasContext: context, viewport, canvas }).promise;
+  // Copier scans draw ink through a transparent stencil. Without paper white behind it,
+  // JPEG turns every untouched pixel black and the printed text and circles vanish.
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({
+    canvasContext: context,
+    viewport,
+    canvas,
+    background: "#ffffff",
+  }).promise;
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (next) => {
@@ -73,7 +90,7 @@ async function renderPdfPage(pdf: { getPage: (n: number) => Promise<any> }, numb
         resolve(next);
       },
       "image/jpeg",
-      0.85,
+      0.92,
     );
   });
   return blob;

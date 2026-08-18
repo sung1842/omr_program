@@ -6,6 +6,7 @@ import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { DEFAULT_TEMPLATE_NAME } from "@/lib/defaultTemplate";
 import { ensureDefaultTemplate } from "@/lib/ensureDefaultTemplate";
 import { FORM_FILE_ACCEPT } from "@/lib/loadFormImage";
+import { onWorkspaceReset } from "@/lib/scanEvents";
 import { createClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import { useOmrQueue } from "@/lib/useOmrQueue";
 import type { AnswerMap, TemplateRow } from "@/lib/types";
@@ -33,6 +34,22 @@ export function ScanPanel({ active: _active = true }: { active?: boolean }) {
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "기본 양식을 준비하지 못했습니다.");
       }
+    });
+    return onWorkspaceReset(() => {
+      supabase.auth.getUser().then(async ({ data }) => {
+        const id = data.user?.id ?? null;
+        setUserId(id);
+        if (!id) {
+          setTemplate(null);
+          return;
+        }
+        try {
+          setTemplate(await ensureDefaultTemplate(id));
+          setError(null);
+        } catch (loadError) {
+          setError(loadError instanceof Error ? loadError.message : "기본 양식을 준비하지 못했습니다.");
+        }
+      });
     });
   }, []);
 
@@ -191,7 +208,7 @@ export function ScanPanel({ active: _active = true }: { active?: boolean }) {
         <section className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3">
           <h4 className="text-sm font-medium">예외 파일</h4>
           <p className="mt-1 text-[0.6875rem] text-white/55">
-            인식은 됐지만 선택 한도를 넘기거나 마킹이 칸 규칙에 맞지 않은 장입니다.{" "}
+            인식은 됐지만 선택이 없거나, 특화·일반·시설 선택 개수가 규칙과 다릅니다.{" "}
             <Link href="/exceptions" className="text-cyan-200 underline">
               예외 확인
             </Link>

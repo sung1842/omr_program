@@ -43,7 +43,10 @@ export default function TemplateEditor({ initial }: Props) {
   const [shape, setShape] = useState<MarkerShape>(initial?.marker_shape ?? "square");
   const [threshold, setThreshold] = useState(() => {
     const value = initial?.fill_threshold ?? VILLAGE_AGENDA_FORM.fill_threshold;
-    return value > 0.04 ? VILLAGE_AGENDA_FORM.fill_threshold : value;
+    if (value >= 0.2 && value <= 0.95) {
+      return value;
+    }
+    return VILLAGE_AGENDA_FORM.fill_threshold;
   });
   const [mode, setMode] = useState<Mode>("marker");
   const [markers, setMarkers] = useState<DraftMarker[]>([]);
@@ -462,18 +465,19 @@ export default function TemplateEditor({ initial }: Props) {
           </select>
         </label>
         <label className="block text-sm">
-          구멍 대비 여유 {threshold.toFixed(3)}
+          원 채움 임계값 {threshold.toFixed(2)}
           <input
             type="range"
-            min={0.004}
-            max={0.04}
-            step={0.001}
+            min={0.15}
+            max={0.60}
+            step={0.01}
             value={threshold}
             onChange={(event) => setThreshold(Number(event.target.value))}
             className="mt-1 w-full"
           />
           <span className="mt-1 block text-[0.6875rem] text-muted">
-            원 테두리는 빼고 안쪽 구멍만 봅니다. 낮을수록 작은 체크도 선택입니다.
+            인쇄된 원 안쪽이 이 비율 이상 어두우면 선택입니다. 낮출수록 연한 체크도 잡힙니다.
+            특화·시설은 2개 이상이면 개수 예외로 처리합니다. 옆 칸 넘침은 보지 않습니다.
           </span>
         </label>
         <div className="flex gap-2">
@@ -500,8 +504,8 @@ export default function TemplateEditor({ initial }: Props) {
           </button>
         </div>
         <p className="text-xs leading-5 text-muted">
-          기준점은 페이지 끝이 아니라 표 외곽 네 모서리입니다. 기표는 칸(네모)과 그 안 원을
-          따로 그립니다. 원이 칸보다 커도 칸 안에만 있으면 유효하고, 옆 칸으로 넘어가면 예외입니다.
+          기준점은 표 외곽 네 모서리입니다. 기표는 칸(cell)과 그 안 원(circle)만 씁니다.
+          선택 여부는 원 안 채움으로 보고, 특화·시설 2개 이상·일반 5개 이상은 개수 예외입니다.
         </p>
         <ul className="space-y-1 rounded border border-line bg-white px-3 py-2 text-[0.6875rem] text-muted">
           <li>설문지 {image ? "업로드됨" : "필요"}</li>

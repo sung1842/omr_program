@@ -34,14 +34,19 @@ yarn-error.log*
 .env*
 !.env.example
 
+# scan samples pulled down for local calibration
+/tmp_debug/
+/tmp_measure/
+
 # python
 __pycache__/
 .venv/
 venv/
 *.pyc
 
-# generated pdf.js worker
+# generated pdf.js assets
 /public/pdf.worker.min.mjs
+/public/pdfjs/
 
 # typescript
 *.tsbuildinfo
