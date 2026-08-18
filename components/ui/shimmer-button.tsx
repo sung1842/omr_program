@@ -53,7 +53,7 @@ const ShimmerButton = React.forwardRef<HTMLButtonElement, ShimmerButtonProps>(
           className,
         )}
         ref={ref}
-        disabled={disabled}
+        disabled={Boolean(disabled)}
         {...props}
       >
         {!disabled ? (

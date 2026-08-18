@@ -10,7 +10,7 @@ import { createClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import { useOmrQueue } from "@/lib/useOmrQueue";
 import type { AnswerMap, TemplateRow } from "@/lib/types";
 
-export function ScanPanel() {
+export function ScanPanel({ active: _active = true }: { active?: boolean }) {
   const [template, setTemplate] = useState<TemplateRow | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,14 +81,14 @@ export function ScanPanel() {
         </div>
         <div className="flex flex-wrap items-end gap-1.5">
           <ShimmerButton
-            disabled={running || preparing || counts.pending === 0}
+            disabled={Boolean(running || preparing || counts.pending === 0)}
             className="shadow-lg"
             onClick={start}
           >
             {running ? "처리 중..." : "대기열 처리 시작"}
           </ShimmerButton>
           <ShimmerButton
-            disabled={running || items.length === 0}
+            disabled={Boolean(running || items.length === 0)}
             background="rgba(15, 118, 110, 1)"
             className="shadow-lg"
             onClick={clear}
@@ -178,7 +178,7 @@ export function ScanPanel() {
                   <td className="px-3 py-1.5">{statusLabel(item.status)}</td>
                   <td className="px-3 py-1.5 text-white/80">{sheetAnswers(item.answers, item.status)}</td>
                   <td className={`px-3 py-1.5 ${item.status === "failed" ? "text-red-300" : item.status === "exception" ? "text-amber-200" : ""}`}>
-                    {item.errorMessage ?? ""}
+                    {item.status === "exception" ? "" : (item.errorMessage ?? "")}
                   </td>
                 </tr>
               ))
@@ -187,11 +187,11 @@ export function ScanPanel() {
         </table>
       </section>
 
-      {done && exceptionItems.length > 0 ? (
+      {exceptionItems.length > 0 ? (
         <section className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3">
-          <h4 className="text-sm font-medium">예외 파일 (선택 한도 초과)</h4>
+          <h4 className="text-sm font-medium">예외 파일</h4>
           <p className="mt-1 text-[0.6875rem] text-white/55">
-            인식은 됐지만 선택 한도를 넘긴 장입니다.{" "}
+            인식은 됐지만 선택 한도를 넘기거나 마킹이 칸 규칙에 맞지 않은 장입니다.{" "}
             <Link href="/exceptions" className="text-cyan-200 underline">
               예외 확인
             </Link>
@@ -201,7 +201,6 @@ export function ScanPanel() {
             {exceptionItems.map((item) => (
               <li key={item.id}>
                 <span className="font-medium">{item.filename}</span>
-                <span className="text-amber-200"> — {item.errorMessage}</span>
               </li>
             ))}
           </ul>
