@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ShimmerButton } from "@/components/ui/shimmer-button";
+import { GlassButton } from "@/components/ui/glass-button";
 import { DEFAULT_TEMPLATE_NAME } from "@/lib/defaultTemplate";
 import { ensureDefaultTemplate } from "@/lib/ensureDefaultTemplate";
 import { FORM_FILE_ACCEPT } from "@/lib/loadFormImage";
@@ -88,21 +88,15 @@ export function ScanPanel({ active: _active = true }: { active?: boolean }) {
           <p className="mt-0.5 text-[0.6875rem] text-white/50">{DEFAULT_TEMPLATE_NAME} · 좌표 학습 없이 바로 채점</p>
         </div>
         <div className="flex flex-wrap items-end gap-1.5">
-          <ShimmerButton
+          <GlassButton
             disabled={Boolean(running || preparing || counts.pending === 0)}
-            className="shadow-lg"
             onClick={start}
           >
             {running ? "처리 중..." : "대기열 처리 시작"}
-          </ShimmerButton>
-          <ShimmerButton
-            disabled={Boolean(running || items.length === 0)}
-            background="rgba(15, 118, 110, 1)"
-            className="shadow-lg"
-            onClick={clear}
-          >
+          </GlassButton>
+          <GlassButton disabled={Boolean(running || items.length === 0)} onClick={clear}>
             큐 비우기
-          </ShimmerButton>
+          </GlassButton>
         </div>
       </div>
 

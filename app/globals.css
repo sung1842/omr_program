@@ -15,6 +15,19 @@
   --mark: #9b2c2c;
   --ok: #2f6b4f;
   --warn: #9a6700;
+  --btn-text: #041018;
+  --btn-primary-bg: #00f3ff;
+  --btn-primary-shimmer: #f4feff;
+  --btn-primary-border: #7af8ff;
+  --btn-primary-glow: 0 0 14px rgba(0, 243, 255, 0.55);
+  --btn-accent-bg: #3dff9a;
+  --btn-accent-shimmer: #f0fff7;
+  --btn-accent-border: #9dffc9;
+  --btn-accent-glow: 0 0 14px rgba(61, 255, 154, 0.5);
+  --btn-danger-bg: #ff2ec8;
+  --btn-danger-shimmer: #fff0fb;
+  --btn-danger-border: #ff7adf;
+  --btn-danger-glow: 0 0 14px rgba(255, 46, 200, 0.5);
 }
 
 html[data-theme="light"] {
@@ -22,6 +35,24 @@ html[data-theme="light"] {
   --theme-black: #f3eee4;
   --color-cyan-200: #0f766e;
   --color-cyan-300: #155e75;
+  /* Pale amber washes out on the cream paper; use rust so overflow copy stays readable. */
+  --color-amber-100: #9a3412;
+  --color-amber-200: #9a3412;
+  --color-amber-400: #c2410c;
+  --color-amber-500: #c2410c;
+  --btn-text: #3b4a52;
+  --btn-primary-bg: #c9ebf5;
+  --btn-primary-shimmer: #ffffff;
+  --btn-primary-border: #a9d7e6;
+  --btn-primary-glow: none;
+  --btn-accent-bg: #d5f0e2;
+  --btn-accent-shimmer: #ffffff;
+  --btn-accent-border: #b4ddc8;
+  --btn-accent-glow: none;
+  --btn-danger-bg: #f6d5dc;
+  --btn-danger-shimmer: #ffffff;
+  --btn-danger-border: #e8b8c2;
+  --btn-danger-glow: none;
 }
 
 @theme inline {
@@ -135,4 +166,312 @@ textarea {
 
 .scrollbar-none::-webkit-scrollbar {
   display: none;
+}
+
+@property --angle-1 {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: -75deg;
+}
+
+@property --angle-2 {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: -45deg;
+}
+
+.glass-button-wrap {
+  --anim--hover-time: 400ms;
+  --anim--hover-ease: cubic-bezier(0.25, 1, 0.5, 1);
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  border-radius: 999vw;
+  background: transparent;
+  pointer-events: none;
+  transition: all var(--anim--hover-time) var(--anim--hover-ease);
+}
+
+.glass-button-shadow {
+  --shadow-cuttoff-fix: 2em;
+  position: absolute;
+  width: calc(100% + var(--shadow-cuttoff-fix));
+  height: calc(100% + var(--shadow-cuttoff-fix));
+  top: calc(0% - var(--shadow-cuttoff-fix) / 2);
+  left: calc(0% - var(--shadow-cuttoff-fix) / 2);
+  filter: blur(clamp(2px, 0.125em, 12px));
+  overflow: visible;
+  pointer-events: none;
+}
+
+.glass-button-shadow::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: 999vw;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.1));
+  width: calc(100% - var(--shadow-cuttoff-fix) - 0.25em);
+  height: calc(100% - var(--shadow-cuttoff-fix) - 0.25em);
+  top: calc(var(--shadow-cuttoff-fix) - 0.5em);
+  left: calc(var(--shadow-cuttoff-fix) - 0.875em);
+  padding: 0.125em;
+  box-sizing: border-box;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  transition: all var(--anim--hover-time) var(--anim--hover-ease);
+  overflow: visible;
+  opacity: 1;
+}
+
+.glass-button {
+  --border-width: clamp(1px, 0.0625em, 4px);
+  appearance: none;
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  font: inherit;
+  color: inherit;
+  background: linear-gradient(-75deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05));
+  cursor: pointer;
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+  z-index: 3;
+  border-radius: 999vw;
+  box-shadow:
+    inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05),
+    inset 0 -0.125em 0.125em rgba(255, 255, 255, 0.5),
+    0 0.25em 0.125em -0.125em rgba(0, 0, 0, 0.2),
+    0 0 0.1em 0.25em inset rgba(255, 255, 255, 0.2),
+    0 0 0 0 rgba(255, 255, 255, 1);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  transition: transform 400ms cubic-bezier(0.25, 1, 0.5, 1), box-shadow 400ms cubic-bezier(0.25, 1, 0.5, 1),
+    backdrop-filter 400ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+html[data-theme="dark"] .glass-button {
+  background: linear-gradient(
+    -75deg,
+    rgba(0, 210, 230, 0.1),
+    rgba(180, 245, 255, 0.2),
+    rgba(0, 180, 210, 0.12)
+  );
+  box-shadow:
+    inset 0 0.125em 0.125em rgba(0, 0, 0, 0.08),
+    inset 0 -0.125em 0.125em rgba(190, 250, 255, 0.38),
+    0 0.25em 0.125em -0.125em rgba(0, 0, 0, 0.28),
+    0 0 0.1em 0.22em inset rgba(120, 235, 255, 0.28),
+    0 0 0.7em rgba(0, 220, 255, 0.18);
+}
+
+.glass-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.glass-button:hover:not(:disabled) {
+  transform: scale(0.975);
+  -webkit-backdrop-filter: blur(0.25px);
+  backdrop-filter: blur(0.25px);
+  box-shadow:
+    inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05),
+    inset 0 -0.125em 0.125em rgba(255, 255, 255, 0.5),
+    0 0.15em 0.05em -0.1em rgba(0, 0, 0, 0.25),
+    0 0 0.05em 0.1em inset rgba(255, 255, 255, 0.5),
+    0 0 0 0 rgba(255, 255, 255, 1);
+}
+
+html[data-theme="dark"] .glass-button:hover:not(:disabled) {
+  background: linear-gradient(
+    -75deg,
+    rgba(0, 220, 240, 0.14),
+    rgba(190, 248, 255, 0.26),
+    rgba(0, 190, 220, 0.16)
+  );
+  box-shadow:
+    inset 0 0.125em 0.125em rgba(0, 0, 0, 0.08),
+    inset 0 -0.125em 0.125em rgba(210, 252, 255, 0.45),
+    0 0.15em 0.05em -0.1em rgba(0, 0, 0, 0.3),
+    0 0 0.05em 0.1em inset rgba(140, 240, 255, 0.4),
+    0 0 0.95em rgba(0, 230, 255, 0.28);
+}
+
+.glass-button-text {
+  position: relative;
+  display: block;
+  user-select: none;
+  -webkit-user-select: none;
+  letter-spacing: -0.05em;
+  font-weight: 500;
+  font-size: 1em;
+  line-height: 1;
+  color: rgba(50, 50, 50, 1);
+  text-shadow: 0em 0.25em 0.05em rgba(0, 0, 0, 0.1);
+  transition: all var(--anim--hover-time) var(--anim--hover-ease);
+  padding-inline: 1.1em;
+  padding-block: 0.32em;
+}
+
+html[data-theme="dark"] .glass-button-text {
+  color: rgba(245, 245, 245, 0.96);
+  text-shadow: 0em 0.25em 0.05em rgba(0, 0, 0, 0.35);
+}
+
+.glass-button:hover:not(:disabled) .glass-button-text {
+  text-shadow: 0.025em 0.025em 0.025em rgba(0, 0, 0, 0.12);
+}
+
+.glass-button-text::after {
+  content: "";
+  display: block;
+  position: absolute;
+  z-index: 3;
+  width: calc(100% - var(--border-width));
+  height: calc(100% - var(--border-width));
+  top: calc(0% + var(--border-width) / 2);
+  left: calc(0% + var(--border-width) / 2);
+  box-sizing: border-box;
+  border-radius: 999vw;
+  overflow: clip;
+  background: linear-gradient(
+    var(--angle-2),
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.5) 40% 50%,
+    rgba(255, 255, 255, 0) 55%
+  );
+  mix-blend-mode: screen;
+  pointer-events: none;
+  background-size: 200% 200%;
+  background-position: 0% 50%;
+  background-repeat: no-repeat;
+  transition:
+    background-position calc(var(--anim--hover-time) * 1.25) var(--anim--hover-ease),
+    --angle-2 calc(var(--anim--hover-time) * 1.25) var(--anim--hover-ease);
+}
+
+.glass-button:hover:not(:disabled) .glass-button-text::after {
+  background-position: 25% 50%;
+}
+
+.glass-button:active:not(:disabled) .glass-button-text::after {
+  background-position: 50% 15%;
+  --angle-2: -15deg;
+}
+
+.glass-button::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: 999vw;
+  width: calc(100% + var(--border-width));
+  height: calc(100% + var(--border-width));
+  top: calc(0% - var(--border-width) / 2);
+  left: calc(0% - var(--border-width) / 2);
+  padding: var(--border-width);
+  box-sizing: border-box;
+  background:
+    conic-gradient(
+      from var(--angle-1) at 50% 50%,
+      rgba(0, 0, 0, 0.5),
+      rgba(0, 0, 0, 0) 5% 40%,
+      rgba(0, 0, 0, 0.5) 50%,
+      rgba(0, 0, 0, 0) 60% 95%,
+      rgba(0, 0, 0, 0.5)
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.5));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  transition: all var(--anim--hover-time) var(--anim--hover-ease), --angle-1 500ms ease;
+  box-shadow: inset 0 0 0 calc(var(--border-width) / 2) rgba(255, 255, 255, 0.5);
+}
+
+html[data-theme="dark"] .glass-button-text::after {
+  background: linear-gradient(
+    var(--angle-2),
+    rgba(255, 255, 255, 0) 0%,
+    rgba(190, 245, 255, 0.55) 40% 50%,
+    rgba(255, 255, 255, 0) 55%
+  );
+}
+
+html[data-theme="dark"] .glass-button::after {
+  background:
+    conic-gradient(
+      from var(--angle-1) at 50% 50%,
+      rgba(0, 0, 0, 0.5),
+      rgba(0, 0, 0, 0) 5% 40%,
+      rgba(0, 0, 0, 0.5) 50%,
+      rgba(0, 0, 0, 0) 60% 95%,
+      rgba(0, 0, 0, 0.5)
+    ),
+    linear-gradient(180deg, rgba(186, 240, 255, 0.55), rgba(255, 255, 255, 0.38));
+  box-shadow: inset 0 0 0 calc(var(--border-width) / 2) rgba(186, 240, 255, 0.45);
+}
+
+.glass-button:hover:not(:disabled)::after {
+  --angle-1: -125deg;
+}
+
+.glass-button:active:not(:disabled)::after {
+  --angle-1: -75deg;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .glass-button-text::after,
+  .glass-button:active:not(:disabled) .glass-button-text::after {
+    --angle-2: -45deg;
+  }
+
+  .glass-button::after,
+  .glass-button:hover:not(:disabled)::after,
+  .glass-button:active:not(:disabled)::after {
+    --angle-1: -75deg;
+  }
+}
+
+.glass-button-wrap:has(.glass-button:hover:not(:disabled)) .glass-button-shadow {
+  filter: blur(clamp(2px, 0.0625em, 6px));
+  transition: filter var(--anim--hover-time) var(--anim--hover-ease);
+}
+
+.glass-button-wrap:has(.glass-button:hover:not(:disabled)) .glass-button-shadow::after {
+  top: calc(var(--shadow-cuttoff-fix) - 0.875em);
+  opacity: 1;
+}
+
+.glass-button-wrap:has(.glass-button:active:not(:disabled)) {
+  transform: rotate3d(1, 0, 0, 25deg);
+}
+
+.glass-button-wrap:has(.glass-button:active:not(:disabled)) .glass-button {
+  box-shadow:
+    inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05),
+    inset 0 -0.125em 0.125em rgba(255, 255, 255, 0.5),
+    0 0.125em 0.125em -0.125em rgba(0, 0, 0, 0.2),
+    0 0 0.1em 0.25em inset rgba(255, 255, 255, 0.2),
+    0 0.225em 0.05em 0 rgba(0, 0, 0, 0.05),
+    0 0.25em 0 0 rgba(255, 255, 255, 0.75),
+    inset 0 0.25em 0.05em 0 rgba(0, 0, 0, 0.15);
+}
+
+.glass-button-wrap:has(.glass-button:active:not(:disabled)) .glass-button-shadow {
+  filter: blur(clamp(2px, 0.125em, 12px));
+}
+
+.glass-button-wrap:has(.glass-button:active:not(:disabled)) .glass-button-shadow::after {
+  top: calc(var(--shadow-cuttoff-fix) - 0.5em);
+  opacity: 0.75;
+}
+
+.glass-button-wrap:has(.glass-button:active:not(:disabled)) .glass-button-text {
+  text-shadow: 0.025em 0.25em 0.05em rgba(0, 0, 0, 0.12);
 }

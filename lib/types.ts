@@ -77,7 +77,7 @@ export type QueueItem = {
   id: string;
   /** Page image handed to the recognizer. */
   file: File;
-  /** Untouched upload this page came from, kept for human review. */
+  /** Original upload this page came from (PDF or single image). */
   source: File;
   sourcePage: number;
   filename: string;

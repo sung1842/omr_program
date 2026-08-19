@@ -38,8 +38,6 @@ const fadeIn: Variants = {
 };
 
 const CHAPTER_ICONS = [BarChart3, FileScan, ClipboardCheck];
-const SNAP_THRESHOLD = 90;
-const SNAP_COOLDOWN_MS = 720;
 
 const PANELS = [DashboardPanel, ScanPanel, ExceptionPanel] as const;
 
@@ -136,8 +134,8 @@ function WorkspaceDock({
         })}
       </div>
 
-      <div className="relative hidden h-11 w-11 items-center justify-center md:flex">
-        <svg className="h-full w-full -rotate-90">
+      <div className="relative hidden size-11 md:block">
+        <svg viewBox="0 0 44 44" className="absolute inset-0 size-full -rotate-90">
           <circle cx="22" cy="22" r="15" className="stroke-white/10" strokeWidth="2" fill="none" />
           <motion.circle
             cx="22"
@@ -150,7 +148,7 @@ function WorkspaceDock({
             style={{ pathLength: smoothProgress }}
           />
         </svg>
-        <PlayCircle className="absolute size-[0.8125rem] text-white" />
+        <PlayCircle className="absolute left-1/2 top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 text-white" />
       </div>
 
       <div className="flex items-center gap-0.5 border-l border-white/10 pl-1.5 pr-1 sm:gap-1.5 sm:pl-2.5 sm:pr-1.5">
@@ -168,22 +166,6 @@ function WorkspaceDock({
   );
 }
 
-function canScrollInside(target: EventTarget | null, deltaY: number) {
-  const node = target instanceof Element ? target.closest("[data-panel-scroll]") : null;
-  if (!(node instanceof HTMLElement)) {
-    return false;
-  }
-  const atTop = node.scrollTop <= 0;
-  const atBottom = node.scrollTop + node.clientHeight >= node.scrollHeight - 1;
-  if (deltaY < 0 && !atTop) {
-    return true;
-  }
-  if (deltaY > 0 && !atBottom) {
-    return true;
-  }
-  return false;
-}
-
 export default function CinematicWorkspace() {
   const pathname = usePathname();
   const router = useRouter();
@@ -193,9 +175,6 @@ export default function CinematicWorkspace() {
   const configured = hasSupabaseConfig();
   const progress = useMotionValue(pathIndex / Math.max(WORKSPACE_CHAPTERS.length - 1, 1));
   const activeRef = useRef(activeIndex);
-  const lockedRef = useRef(false);
-  const accRef = useRef(0);
-  const touchStartY = useRef(0);
 
   activeRef.current = activeIndex;
 
@@ -231,64 +210,6 @@ export default function CinematicWorkspace() {
       setEmail(session.data.user?.email ?? null);
     })();
   }, [configured]);
-
-  useEffect(() => {
-    const lock = () => {
-      lockedRef.current = true;
-      window.setTimeout(() => {
-        lockedRef.current = false;
-        accRef.current = 0;
-      }, SNAP_COOLDOWN_MS);
-    };
-
-    const snapByDelta = (delta: number) => {
-      if (lockedRef.current) {
-        return;
-      }
-      accRef.current += delta;
-      if (accRef.current > SNAP_THRESHOLD) {
-        goTo(activeRef.current + 1);
-        lock();
-      } else if (accRef.current < -SNAP_THRESHOLD) {
-        goTo(activeRef.current - 1);
-        lock();
-      }
-    };
-
-    const onWheel = (event: WheelEvent) => {
-      if (canScrollInside(event.target, event.deltaY)) {
-        return;
-      }
-      event.preventDefault();
-      snapByDelta(event.deltaY);
-    };
-
-    const onTouchStart = (event: TouchEvent) => {
-      touchStartY.current = event.touches[0]?.clientY ?? 0;
-    };
-
-    const onTouchEnd = (event: TouchEvent) => {
-      const endY = event.changedTouches[0]?.clientY ?? touchStartY.current;
-      const delta = touchStartY.current - endY;
-      if (canScrollInside(event.target, delta)) {
-        return;
-      }
-      if (Math.abs(delta) < 40) {
-        return;
-      }
-      event.preventDefault();
-      snapByDelta(delta > 0 ? SNAP_THRESHOLD + 1 : -(SNAP_THRESHOLD + 1));
-    };
-
-    window.addEventListener("wheel", onWheel, { passive: false });
-    window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchend", onTouchEnd, { passive: false });
-    return () => {
-      window.removeEventListener("wheel", onWheel);
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchend", onTouchEnd);
-    };
-  }, [goTo]);
 
   async function logout() {
     const supabase = createClient();

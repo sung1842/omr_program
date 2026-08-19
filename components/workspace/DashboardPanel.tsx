@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ShimmerButton } from "@/components/ui/shimmer-button";
+import { GlassButton } from "@/components/ui/glass-button";
 import { downloadResultsXlsx } from "@/lib/excel";
 import { isPendingException } from "@/lib/exceptionReview";
 import { ensureDefaultTemplate } from "@/lib/ensureDefaultTemplate";
@@ -179,18 +179,17 @@ export function DashboardPanel({ active = true }: { active?: boolean }) {
             <button
               type="button"
               onClick={() => setConfirmReset(true)}
-              className="rounded-full border border-white/15 px-2.5 py-1 text-[0.625rem] text-white/70 hover:bg-white/10 hover:text-white"
+              className="inline-flex items-center rounded-full border border-white/15 px-[1.1em] py-[0.32em] text-[15px] font-medium leading-none tracking-tight text-white/70 hover:bg-white/10 hover:text-white"
             >
               초기화
             </button>
           )}
-          <ShimmerButton
+          <GlassButton
             disabled={!template || results.length === 0}
-            className="shadow-lg"
             onClick={() => template && downloadResultsXlsx(template.name, template.questions, results)}
           >
             엑셀
-          </ShimmerButton>
+          </GlassButton>
         </div>
       </div>
 

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { OmrRequestError, recognizeSheet } from "@/lib/omrClient";
 import { isPdfFile, loadPdfPagesAsFiles } from "@/lib/loadFormImage";
 import { emitScanResultsChanged, onWorkspaceReset } from "@/lib/scanEvents";
-import { removeScanSheets, uploadSourceFile } from "@/lib/sheetStorage";
+import { uploadSourceFile } from "@/lib/sheetStorage";
 import { createClient } from "@/lib/supabase/client";
 import type { ExceptionReason, QueueItem, ScanResultStatus, TemplateRow } from "@/lib/types";
 
@@ -13,19 +13,6 @@ function isImageFile(file: File) {
     file.type.startsWith("image/") ||
     /\.(png|jpe?g|webp|tif{1,2}|bmp)$/i.test(file.name)
   );
-}
-
-/** One storage path per uploaded file, so a retry overwrites instead of piling up copies. */
-const sourceIds = new WeakMap<File, string>();
-
-function sourceIdOf(file: File) {
-  const existing = sourceIds.get(file);
-  if (existing) {
-    return existing;
-  }
-  const next = crypto.randomUUID();
-  sourceIds.set(file, next);
-  return next;
 }
 
 function selectedLabelCount(answers: Record<string, unknown> | null | undefined) {
@@ -40,36 +27,18 @@ function selectedLabelCount(answers: Record<string, unknown> | null | undefined)
   }, 0);
 }
 
-/**
- * Drops stored originals once every page from them landed cleanly. A multi-page PDF
- * stays until its last unreviewed exception or failure is gone.
- */
-async function releaseCleanSources(
+async function storeProblemPage(
   supabase: ReturnType<typeof createClient>,
-  sourcePaths: Map<File, string | null>,
-) {
-  const paths = Array.from(new Set(Array.from(sourcePaths.values()).filter(Boolean) as string[]));
-  if (paths.length === 0) {
-    return;
-  }
-  const { data, error } = await supabase
-    .from("scan_results")
-    .select("source_path, status, reviewed_at")
-    .in("source_path", paths);
-  if (error) {
-    return;
-  }
-  const keep = new Set(
-    (data ?? [])
-      .filter((row: { status: string; reviewed_at: string | null; source_path: string | null }) => {
-        return row.status === "failed" || (row.status === "exception" && !row.reviewed_at);
-      })
-      .map((row: { source_path: string | null }) => row.source_path as string),
-  );
-  await removeScanSheets(
-    supabase,
-    paths.filter((path) => !keep.has(path)),
-  );
+  userId: string,
+  sheetId: string,
+  page: File,
+  sourcePage: number,
+): Promise<{ source_path: string | null; source_page: number | null }> {
+  const sourcePath = await uploadSourceFile(supabase, userId, sheetId, page);
+  return {
+    source_path: sourcePath,
+    source_page: sourcePath ? sourcePage : null,
+  };
 }
 
 export function useOmrQueue() {
@@ -194,30 +163,11 @@ export function useOmrQueue() {
         throw jobError;
       }
 
-      // Store every upload untouched before recognition runs. Whatever happens next,
-      // an exception always has the original bytes to show.
-      const sourcePaths = new Map<File, string | null>();
-      const sources = Array.from(new Set(targets.map((item) => item.source)));
-      for (let index = 0; index < sources.length; index += 1) {
-        setPreparing(`원본 보관 중 ${index + 1}/${sources.length}...`);
-        const source = sources[index];
-        sourcePaths.set(
-          source,
-          await uploadSourceFile(supabase, userId, sourceIdOf(source), source),
-        );
-      }
-      setPreparing(null);
-
       let successCount = 0;
       let exceptionCount = 0;
       let failedCount = 0;
 
       for (const item of targets) {
-        const sourcePath = sourcePaths.get(item.source) ?? null;
-        const sourceColumns: { source_path: string | null; source_page: number | null } = {
-          source_path: sourcePath,
-          source_page: sourcePath ? item.sourcePage : null,
-        };
         updateItem(item.id, { status: "processing", attempts: item.attempts + 1 });
         try {
           const result = await recognizeSheet(item.file, template);
@@ -238,6 +188,9 @@ export function useOmrQueue() {
           const reasonText = reasons.map((reason) => reason.message).join(" / ");
           const errorCode = isException ? (emptySheet ? "RULE_EMPTY" : "RULE_OVERFLOW") : null;
           const resultId = crypto.randomUUID();
+          const sourceColumns = isException
+            ? await storeProblemPage(supabase, userId, resultId, item.file, item.sourcePage)
+            : { source_path: null, source_page: null };
           const payload = {
             id: resultId,
             job_id: job.id,
@@ -256,7 +209,7 @@ export function useOmrQueue() {
             ...sourceColumns,
           };
           let { error } = await supabase.from("scan_results").insert(payload);
-          if (error && sourcePath) {
+          if (error && sourceColumns.source_path) {
             const withoutSource = { ...payload };
             delete (withoutSource as Record<string, unknown>).source_path;
             delete (withoutSource as Record<string, unknown>).source_page;
@@ -299,7 +252,16 @@ export function useOmrQueue() {
                   "INTERNAL",
                   error instanceof Error ? error.message : "처리 중 오류가 발생했습니다.",
                 );
+          const failId = crypto.randomUUID();
+          const sourceColumns = await storeProblemPage(
+            supabase,
+            userId,
+            failId,
+            item.file,
+            item.sourcePage,
+          );
           await supabase.from("scan_results").insert({
+            id: failId,
             job_id: job.id,
             template_id: template.id,
             filename: item.filename,
@@ -317,8 +279,6 @@ export function useOmrQueue() {
           emitScanResultsChanged();
         }
       }
-
-      await releaseCleanSources(supabase, sourcePaths);
 
       const { error: jobUpdateError } = await supabase
         .from("scan_jobs")

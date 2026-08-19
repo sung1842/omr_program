@@ -31,8 +31,8 @@ export function isPdfPath(path: string | null | undefined) {
 }
 
 /**
- * Stores the upload exactly as it arrived. Re-encoding here is what previously
- * dropped page content, so the bytes are never touched on the way to storage.
+ * Stores one sheet image for human review. Only exception/failed pages call this,
+ * never the whole multi-page upload.
  */
 export async function uploadSourceFile(
   supabase: SupabaseClient,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ShimmerButton } from "@/components/ui/shimmer-button";
+import { GlassButton } from "@/components/ui/glass-button";
 import {
   answersFromSelection,
   formatSelection,
@@ -171,7 +171,8 @@ export function ExceptionPanel({ active = true }: { active?: boolean }) {
           <p className="font-mono text-[0.5625rem] tracking-[0.2em] text-white/45">EXCEPTION</p>
           <h3 className="text-base font-semibold">예외 수작업</h3>
           <p className="mt-0.5 text-[11px] text-white/50">
-            이미지를 보고 기표 항목을 직접 체크한 뒤 DB에 반영합니다.
+            PDF는 예외로 걸린 장만 따로 보관합니다. 그 이미지를 보고 기표 항목을 직접 체크한 뒤
+            집계에 반영합니다.
           </p>
         </div>
         <div className="flex rounded-lg border border-white/15 bg-black/30 p-0.5 text-xs">
@@ -242,6 +243,11 @@ export function ExceptionPanel({ active = true }: { active?: boolean }) {
                       </span>
                     ) : (
                       <>
+                        {selected.source_page ? (
+                          <span className="rounded border border-white/15 px-2 py-1 text-white/60">
+                            {selected.source_page}쪽만 보관
+                          </span>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => setZoom("actual")}
@@ -348,18 +354,15 @@ export function ExceptionPanel({ active = true }: { active?: boolean }) {
 
                 {tab === "queue" ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <ShimmerButton type="submit" disabled={saving || Boolean(limitError)} className="shadow-lg">
-                      {saving ? "저장 중..." : "체크 항목을 집계에 반영"}
-                    </ShimmerButton>
-                    <ShimmerButton
-                      disabled={saving}
-                      background="rgba(120, 53, 15, 1)"
-                      className="shadow-lg"
-                      onClick={() => void save("exclude")}
-                    >
-                      집계에서 제외하고 완료
-                    </ShimmerButton>
-                    {limitError ? <p className="text-[11px] text-amber-200">{limitError}</p> : null}
+                    <GlassButton type="submit" disabled={saving || Boolean(limitError)}>
+                      {saving ? "저장 중..." : "집계 반영"}
+                    </GlassButton>
+                    <GlassButton disabled={saving} onClick={() => void save("exclude")}>
+                      집계 제외
+                    </GlassButton>
+                    {limitError ? (
+                      <p className="text-[11px] font-medium text-amber-200">{limitError}</p>
+                    ) : null}
                   </div>
                 ) : (
                   <p className="text-xs text-white/55">
@@ -376,8 +379,8 @@ export function ExceptionPanel({ active = true }: { active?: boolean }) {
 }
 
 /**
- * Detaches the reviewed row from its stored original and deletes the file once no
- * other page of the same upload still needs it.
+ * Detaches the reviewed row from its stored page image and deletes the file
+ * once no other row still points at it.
  */
 async function releaseReviewedSource(
   supabase: ReturnType<typeof createClient>,
