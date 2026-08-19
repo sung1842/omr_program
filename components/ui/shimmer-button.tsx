@@ -45,7 +45,7 @@ const ShimmerButton = React.forwardRef<HTMLButtonElement, ShimmerButtonProps>(
           } as CSSProperties
         }
         className={cn(
-          "group relative z-0 flex h-6 items-center justify-center overflow-hidden whitespace-nowrap border px-2 py-0 font-sans text-[0.4375rem] font-semibold tracking-tight text-white [background:var(--bg)] [border-radius:var(--radius)]",
+          "group relative z-0 flex h-6 items-center justify-center overflow-hidden whitespace-nowrap border px-2 py-0 font-sans text-[0.4375rem] font-semibold tracking-tight text-[#fff] [background:var(--bg)] [border-radius:var(--radius)]",
           "transform-gpu transition-transform duration-300 ease-in-out",
           disabled
             ? "cursor-not-allowed border-transparent text-zinc-300"

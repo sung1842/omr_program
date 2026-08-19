@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState, type MouseEvent } from "react";
 import { BottomGradient, BoxReveal, Ripple, SpotlightInput } from "@/components/ui/modern-animated-sign-in";
 import { FilmGrain } from "@/components/ui/film-grain";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { ADMIN_EMAIL, ADMIN_USERNAME } from "@/lib/auth";
 import { createClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import { WORKSPACE_CHAPTERS } from "@/lib/workspace";
@@ -87,6 +88,9 @@ export function CinematicLogin() {
       <div className="absolute inset-0 bg-gradient-to-br from-black via-black/75 to-cyan-950/40" />
       <motion.div className="absolute inset-0" style={{ background: spotlight }} />
       <FilmGrain />
+      <div className="absolute right-4 top-4 z-40 sm:right-6 sm:top-6">
+        <ThemeToggle className="rounded-full border border-white/12 bg-black/40 p-2 backdrop-blur-md" />
+      </div>
 
       <div className="relative z-30 mx-auto grid min-h-dvh w-full max-w-6xl items-center gap-6 px-4 py-8 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1fr)_min(26rem,38vw)] lg:gap-8 lg:px-10">
         <div className="relative hidden min-h-[26.25rem] items-center lg:flex">

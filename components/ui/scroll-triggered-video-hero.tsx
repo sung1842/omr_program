@@ -5,6 +5,7 @@ import { motion, useMotionValue, useSpring, type MotionValue, type Variants } fr
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FilmGrain } from "@/components/ui/film-grain";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { DashboardPanel } from "@/components/workspace/DashboardPanel";
 import { ExceptionPanel } from "@/components/workspace/ExceptionPanel";
 import { ScanPanel } from "@/components/workspace/ScanPanel";
@@ -152,8 +153,11 @@ function WorkspaceDock({
         <PlayCircle className="absolute size-[0.8125rem] text-white" />
       </div>
 
-      <div className="hidden items-center gap-1.5 border-l border-white/10 pl-2.5 pr-1.5 text-[0.625rem] text-white/45 lg:flex">
-        <span className="max-w-24 truncate">{email ?? "환경 설정 필요"}</span>
+      <div className="flex items-center gap-0.5 border-l border-white/10 pl-1.5 pr-1 sm:gap-1.5 sm:pl-2.5 sm:pr-1.5">
+        <span className="hidden max-w-24 truncate text-[0.625rem] text-white/45 lg:inline">
+          {email ?? "환경 설정 필요"}
+        </span>
+        <ThemeToggle />
         {configured ? (
           <button type="button" onClick={onLogout} className="rounded-full p-1 text-white/55 hover:bg-white/10 hover:text-white">
             <LogOut className="size-3.5" />

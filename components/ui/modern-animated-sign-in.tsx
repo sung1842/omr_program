@@ -46,7 +46,7 @@ export const SpotlightInput = memo(function SpotlightInput({
       <input
         type={type}
         className={cn(
-          "h-11 w-full rounded-[10px] border-0 bg-black/55 px-3 text-sm text-white shadow-[0px_0px_1px_1px_#334155] outline-none placeholder:text-white/35 focus-visible:ring-2 focus-visible:ring-cyan-300/40",
+          "h-11 w-full rounded-[10px] border-0 bg-black/55 px-3 text-sm text-white shadow-[0px_0px_1px_1px_color-mix(in_srgb,var(--theme-white)_24%,transparent)] outline-none placeholder:text-white/35 focus-visible:ring-2 focus-visible:ring-cyan-300/40",
           className,
         )}
         {...props}

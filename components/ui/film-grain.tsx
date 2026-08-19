@@ -4,7 +4,13 @@ import { cn } from "@/lib/utils";
 
 export function FilmGrain({ className }: { className?: string }) {
   return (
-    <div className={cn("pointer-events-none absolute inset-0 z-20 opacity-[0.08] mix-blend-overlay", className)}>
+    <div
+      data-film-grain
+      className={cn(
+        "pointer-events-none absolute inset-0 z-20 opacity-[0.08] mix-blend-overlay [[data-theme=light]_&]:opacity-[0.04]",
+        className,
+      )}
+    >
       <div
         className="absolute inset-0 h-full w-full"
         style={{

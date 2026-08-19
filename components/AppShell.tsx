@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BarChart3, ClipboardCheck, FileScan, LogOut } from "lucide-react";
 import CinematicWorkspace from "@/components/ui/scroll-triggered-video-hero";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { createClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import { isEditorPath, WORKSPACE_CHAPTERS } from "@/lib/workspace";
 
@@ -53,7 +54,7 @@ function EditorChrome({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-dvh bg-[radial-gradient(circle_at_top,_#123,_#05070c_55%)]">
+    <div className="min-h-dvh bg-[radial-gradient(circle_at_top,color-mix(in_srgb,var(--theme-white)_16%,var(--theme-black)),var(--theme-black)_55%)]">
       <header className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
         <div>
           <p className="font-mono text-[0.625rem] tracking-[0.18em] text-white/40">PAPER OMR</p>
@@ -61,6 +62,7 @@ function EditorChrome({ children }: { children: React.ReactNode }) {
         </div>
         <div className="flex items-center gap-2 text-[0.6875rem] text-white/50">
           <span className="hidden max-w-40 truncate sm:inline">{email ?? "환경 설정 필요"}</span>
+          <ThemeToggle />
           {configured ? (
             <button type="button" onClick={logout} className="rounded-full p-1.5 hover:bg-white/10 hover:text-white">
               <LogOut className="size-3.5" />

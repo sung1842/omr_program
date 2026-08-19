@@ -3,6 +3,8 @@
 
 :root {
   --ui-scale: clamp(0.88, calc(100vw / 1440px), 1.18);
+  --theme-white: #f4f1ea;
+  --theme-black: #05070c;
   --paper: #f3eee4;
   --paper-strong: #fffdf8;
   --ink: #1c1917;
@@ -13,6 +15,13 @@
   --mark: #9b2c2c;
   --ok: #2f6b4f;
   --warn: #9a6700;
+}
+
+html[data-theme="light"] {
+  --theme-white: #1c1917;
+  --theme-black: #f3eee4;
+  --color-cyan-200: #0f766e;
+  --color-cyan-300: #155e75;
 }
 
 @theme inline {
@@ -26,6 +35,8 @@
   --color-mark: var(--mark);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
+  --color-white: var(--theme-white);
+  --color-black: var(--theme-black);
   --font-sans: "Pretendard Variable", Pretendard, var(--font-noto), sans-serif;
   --font-mono: var(--font-ibm);
   --animate-orbit: orbit 20s linear infinite;
@@ -91,13 +102,18 @@ body {
 }
 
 html {
-  background: #05070c;
+  background: var(--theme-black);
+  color-scheme: dark;
   font-size: calc(16px * var(--ui-scale));
 }
 
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
 body {
-  background: #05070c;
-  color: #f4f1ea;
+  background: var(--theme-black);
+  color: var(--theme-white);
 }
 
 button,

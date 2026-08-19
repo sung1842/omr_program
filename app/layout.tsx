@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Noto_Sans_KR } from "next/font/google";
+import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
+
+const themeBootScript = `(function(){try{var t=localStorage.getItem("omr-theme");if(t!=="light"&&t!=="dark")t="dark";document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;}catch(e){document.documentElement.dataset.theme="dark";document.documentElement.style.colorScheme="dark";}})();`;
 
 const sans = Noto_Sans_KR({
   variable: "--font-noto",
@@ -25,8 +28,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className={`${sans.variable} ${mono.variable} h-full antialiased`}>
-      <body className="min-h-full font-sans">{children}</body>
+    <html
+      lang="ko"
+      data-theme="dark"
+      suppressHydrationWarning
+      className={`${sans.variable} ${mono.variable} h-full antialiased`}
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
+      <body className="min-h-full font-sans">
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }
