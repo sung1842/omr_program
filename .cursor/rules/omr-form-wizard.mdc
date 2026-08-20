@@ -1,0 +1,16 @@
+---
+description: Form-registration wizard. Load architecture + TASKS. Not for scan scoring.
+globs: components/form-wizard/**,lib/form-wizard/**,docs/form-wizard/**,.cursor/skills/omr-form-wizard/**,components/TemplateEditor.tsx,components/workspace/TemplatesPanel.tsx,**/templates/**/*.tsx
+alwaysApply: false
+---
+
+# Form wizard files
+
+Read `docs/form-wizard/architecture.md` and `docs/form-wizard/TASKS.md` first. Then `.cursor/skills/omr-form-wizard/SKILL.md`.
+
+- Own only the files listed for your agent in TASKS.md.
+- Save `TemplatePayload`. Do not re-detect circles at scan time.
+- Detect is `action: detect_circles` on the existing `api/omr.py` function.
+- Shell vs Konva: 21st.dev prompts restyle `FormWizard` chrome only.
+- Do not edit root `CLAUDE.md` / `AGENTS.md`.
+- Do not `git push` unless the user asked.

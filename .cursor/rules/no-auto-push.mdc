@@ -1,0 +1,6 @@
+---
+description: Never push to GitHub unless the user explicitly asks in this chat.
+alwaysApply: true
+---
+
+Do not run `git push`, `git push --tags`, or publish a GitHub PR unless the user asked for that in the current message.
