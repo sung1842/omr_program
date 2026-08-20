@@ -54,10 +54,10 @@ function EditorChrome({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-dvh bg-[radial-gradient(circle_at_top,color-mix(in_srgb,var(--theme-white)_16%,var(--theme-black)),var(--theme-black)_55%)]">
-      <header className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-black text-white">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
         <div>
-          <p className="font-mono text-[0.625rem] tracking-[0.18em] text-white/40">PAPER OMR</p>
+          <p className="brand-mark font-mono text-[0.625rem] tracking-[0.18em]">PAPER OMR</p>
           <h1 className="text-base font-semibold">양식 편집</h1>
         </div>
         <div className="flex items-center gap-2 text-[0.6875rem] text-white/50">
@@ -71,9 +71,11 @@ function EditorChrome({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-4 pb-24 text-ink">{children}</main>
+      <main className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden px-3 py-3 pb-24 lg:px-4">
+        {children}
+      </main>
 
-      <nav className="fixed bottom-4 left-1/2 z-50 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-0.5 rounded-3xl border border-white/12 bg-black/70 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
+      <nav className="fixed bottom-4 left-1/2 z-50 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-0.5 rounded-3xl border border-white/12 bg-black/70 p-1.5 shadow-[var(--elev-shadow)] backdrop-blur-2xl">
         {WORKSPACE_CHAPTERS.map((chapter, index) => {
           const Icon = ICONS[index];
           const active =

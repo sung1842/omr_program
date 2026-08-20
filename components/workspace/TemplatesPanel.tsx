@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { FORM_FILE_ACCEPT, isSupportedFormFile } from "@/lib/loadFormImage";
+import { rememberActiveTemplate } from "@/lib/form-wizard/saveTemplate";
 import { setPendingTemplateFile } from "@/lib/pendingTemplateFile";
 import { createClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import type { TemplateRow } from "@/lib/types";
@@ -106,9 +107,21 @@ export function TemplatesPanel() {
                   기준점 {template.markers.length} · 문항 {template.questions.length}
                 </p>
               </div>
-              <Link href={`/templates/${template.id}`} className="text-xs text-cyan-200 underline">
-                좌표 수정
-              </Link>
+              <div className="flex shrink-0 items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    rememberActiveTemplate(template.id);
+                    router.push("/scan");
+                  }}
+                  className="text-xs text-cyan-200 underline"
+                >
+                  스캔
+                </button>
+                <Link href={`/templates/${template.id}`} className="text-xs text-cyan-200 underline">
+                  좌표 수정
+                </Link>
+              </div>
             </li>
           ))
         )}

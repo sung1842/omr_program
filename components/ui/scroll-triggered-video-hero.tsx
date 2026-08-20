@@ -1,10 +1,11 @@
 "use client";
 
 import { BarChart3, ClipboardCheck, FileScan, LogOut, PlayCircle } from "lucide-react";
-import { motion, useMotionValue, useSpring, type MotionValue, type Variants } from "motion/react";
+import { motion, useMotionValue, useSpring, type MotionValue } from "motion/react";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FilmGrain } from "@/components/ui/film-grain";
+import { ServiceCard } from "@/components/ui/services-card";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { DashboardPanel } from "@/components/workspace/DashboardPanel";
 import { ExceptionPanel } from "@/components/workspace/ExceptionPanel";
@@ -12,32 +13,9 @@ import { ScanPanel } from "@/components/workspace/ScanPanel";
 import { createClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import { chapterIndexFromPath, WORKSPACE_CHAPTERS } from "@/lib/workspace";
 
-const textContainer: Variants = {
-  hidden: {},
-  visible: {
-    transition: { staggerChildren: 0.08 },
-  },
-};
-
-const textReveal: Variants = {
-  hidden: { y: "100%", opacity: 0 },
-  visible: {
-    y: "0%",
-    opacity: 1,
-    transition: { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
-  },
-};
-
-const fadeIn: Variants = {
-  hidden: { opacity: 0, y: 10 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.4, delay: 0.08, ease: "easeOut" },
-  },
-};
-
 const CHAPTER_ICONS = [BarChart3, FileScan, ClipboardCheck];
+
+const CHAPTER_GRADIENTS = ["chapter-card-status", "chapter-card-scan", "chapter-card-exceptions"];
 
 const PANELS = [DashboardPanel, ScanPanel, ExceptionPanel] as const;
 
@@ -75,13 +53,13 @@ function VideoBackground({ currentChapterIndex }: { currentChapterIndex: number 
               videoRefs.current[index] = node;
             }}
             src={chapter.videoUrl}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover [[data-theme=light]_&]:opacity-20"
             muted
             loop
             playsInline
             preload={index === 0 ? "auto" : "metadata"}
           />
-          <div className="absolute inset-0 bg-black/55" />
+          <div className="cinematic-scrim absolute inset-0 bg-black/55" />
         </motion.div>
       ))}
       <FilmGrain />
@@ -107,7 +85,7 @@ function WorkspaceDock({
 
   return (
     <motion.div
-      className="fixed bottom-4 left-1/2 z-50 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-1 rounded-3xl border border-white/12 bg-black/70 p-1.5 pl-2 pr-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-2xl"
+      className="fixed bottom-4 left-1/2 z-50 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-1 rounded-3xl border border-white/12 bg-black/70 p-1.5 pl-2 pr-1.5 shadow-[var(--elev-shadow)] backdrop-blur-2xl"
       initial={{ y: 80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ delay: 0.25 }}
@@ -141,7 +119,7 @@ function WorkspaceDock({
             cx="22"
             cy="22"
             r="15"
-            className="stroke-cyan-300"
+            className="dock-progress-ring"
             strokeWidth="2"
             fill="none"
             strokeDasharray="94"
@@ -250,38 +228,27 @@ export default function CinematicWorkspace() {
               <motion.aside
                 initial={false}
                 animate={active ? "visible" : "hidden"}
-                variants={textContainer}
-                className="hidden w-[clamp(12.5rem,18vw,16.25rem)] shrink-0 lg:block"
+                variants={{
+                  hidden: {},
+                  visible: { transition: { staggerChildren: 0.1 } },
+                }}
+                className="hidden w-[clamp(10.8rem,15vw,13.3rem)] shrink-0 lg:block"
               >
-                <div className="rounded-2xl border border-white/12 bg-black/35 p-4 backdrop-blur-md">
-                  <motion.div variants={fadeIn} className="mb-3 flex items-center gap-3">
-                    <div className="h-px w-7 bg-cyan-300" />
-                    <span className="text-[0.625rem] font-semibold uppercase tracking-[0.24em] text-cyan-200">
-                      Chapter {chapter.id}
-                    </span>
-                  </motion.div>
-                  <div className="mb-2 overflow-hidden py-0.5">
-                    <motion.h2 variants={textReveal} className="text-2xl font-black leading-tight tracking-tight text-white">
-                      {chapter.subtitle}
-                    </motion.h2>
-                  </div>
-                  <motion.p variants={fadeIn} className="text-xs leading-5 text-white/70">
-                    {chapter.description}
-                  </motion.p>
-                  <motion.ul variants={fadeIn} className="mt-3 space-y-1.5">
-                    {chapter.hints.map((hint) => (
-                      <li key={hint} className="flex items-start gap-2 text-[0.6875rem] leading-4 text-white/80">
-                        <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-cyan-300" />
-                        {hint}
-                      </li>
-                    ))}
-                  </motion.ul>
-                </div>
+                <ServiceCard
+                  index={index}
+                  service={{
+                    number: chapter.id.padStart(3, "0"),
+                    title: chapter.subtitle,
+                    description: chapter.description,
+                    icon: CHAPTER_ICONS[index],
+                    gradient: CHAPTER_GRADIENTS[index],
+                  }}
+                />
               </motion.aside>
 
               <div
                 data-panel-scroll
-                className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto rounded-2xl border border-white/12 bg-black/50 p-4 shadow-2xl backdrop-blur-xl scrollbar-none"
+                className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto rounded-2xl border border-white/12 bg-black/50 p-4 shadow-[var(--elev-shadow-lg)] backdrop-blur-xl scrollbar-none [[data-theme=light]_&]:bg-paper-strong [[data-theme=light]_&]:backdrop-blur-none"
               >
                 <Panel active={active} />
               </div>

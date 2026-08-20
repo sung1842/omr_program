@@ -31,6 +31,10 @@ function withCurrentFormLayout(current: Question[], fresh: Question[]): Question
   });
 }
 
+/**
+ * Seed or refresh only the 신사2동 row named DEFAULT_TEMPLATE_NAME.
+ * Custom wizard templates (any other name) are never updated here.
+ */
 export async function ensureDefaultTemplate(userId: string): Promise<TemplateRow> {
   const supabase = createClient();
   const payload = buildVillageAgendaTemplate();
@@ -45,8 +49,9 @@ export async function ensureDefaultTemplate(userId: string): Promise<TemplateRow
   if (loadError) {
     throw loadError;
   }
-  if (existing?.[0]) {
-    const current = existing[0] as TemplateRow;
+
+  const current = existing?.[0] as TemplateRow | undefined;
+  if (current?.name === DEFAULT_TEMPLATE_NAME) {
     const questions = withCurrentFormLayout(current.questions, payload.questions);
     await supabase
       .from("templates")
@@ -57,7 +62,8 @@ export async function ensureDefaultTemplate(userId: string): Promise<TemplateRow
         fill_threshold: payload.fill_threshold,
         questions,
       })
-      .eq("id", current.id);
+      .eq("id", current.id)
+      .eq("name", DEFAULT_TEMPLATE_NAME);
     return {
       ...current,
       image_width: payload.image_width,

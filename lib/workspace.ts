@@ -43,12 +43,16 @@ export function chapterIndexFromPath(pathname: string) {
   return 0;
 }
 
-export function isEditorPath(_pathname: string) {
-  return false;
+export function isEditorPath(pathname: string) {
+  return pathname === "/templates/new" || pathname.startsWith("/templates/new/");
 }
 
-export function pickDefaultTemplateId<T extends { id: string; name: string }>(rows: T[]) {
-  return (
-    rows.find((row) => /마을의제|기본|default/i.test(row.name))?.id ?? rows[0]?.id ?? ""
-  );
+import { DEFAULT_TEMPLATE_NAME } from "@/lib/defaultTemplate";
+
+export function pickDefaultTemplateId<T extends { id: string; name: string; created_at?: string }>(rows: T[]) {
+  const seeds = rows.filter((row) => row.name === DEFAULT_TEMPLATE_NAME);
+  if (seeds.length > 0) {
+    return [...seeds].sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")))[0].id;
+  }
+  return rows[0]?.id ?? "";
 }

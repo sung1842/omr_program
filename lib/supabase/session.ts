@@ -17,6 +17,31 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
   });
 }
 
+function isAuthCookie(name: string) {
+  return name.startsWith("sb-") && name.includes("auth-token");
+}
+
+function clearAuthCookies(request: NextRequest, base: NextResponse) {
+  const path = request.nextUrl.pathname;
+  const isLogin = path === "/login" || path.startsWith("/login/");
+  const response = isLogin
+    ? base
+    : NextResponse.redirect(
+        (() => {
+          const redirectUrl = request.nextUrl.clone();
+          redirectUrl.pathname = "/login";
+          redirectUrl.searchParams.set("next", path);
+          return redirectUrl;
+        })(),
+      );
+  request.cookies.getAll().forEach(({ name }) => {
+    if (isAuthCookie(name)) {
+      response.cookies.set(name, "", { path: "/", maxAge: 0 });
+    }
+  });
+  return response;
+}
+
 export async function updateSession(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -43,9 +68,18 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const auth = await withTimeout(supabase.auth.getUser(), 2500);
+  const auth = await withTimeout(
+    supabase.auth.getUser().then(
+      (value) => value,
+      (error) => ({ data: { user: null }, error }),
+    ),
+    2500,
+  );
   if (!auth) {
     return response;
+  }
+  if (auth.error) {
+    return clearAuthCookies(request, response);
   }
   const user = auth.data.user;
 

@@ -33,7 +33,7 @@ export const SpotlightInput = memo(function SpotlightInput({
         background: useMotionTemplate`
           radial-gradient(
             ${visible ? `${radius}px` : "0px"} circle at ${mouseX}px ${mouseY}px,
-            #67e8f9,
+            var(--accent),
             transparent 80%
           )
         `,
@@ -46,7 +46,7 @@ export const SpotlightInput = memo(function SpotlightInput({
       <input
         type={type}
         className={cn(
-          "h-11 w-full rounded-[10px] border-0 bg-black/55 px-3 text-sm text-white shadow-[0px_0px_1px_1px_color-mix(in_srgb,var(--theme-white)_24%,transparent)] outline-none placeholder:text-white/35 focus-visible:ring-2 focus-visible:ring-cyan-300/40",
+          "h-11 w-full rounded-[10px] border-0 bg-black/55 px-3 text-sm text-white shadow-[0px_0px_1px_1px_color-mix(in_srgb,var(--theme-white)_24%,transparent)] outline-none placeholder:text-white/35 focus-visible:ring-2 focus-visible:ring-cyan-300/40 [[data-theme=light]_&]:bg-box [[data-theme=light]_&]:focus-visible:ring-[var(--accent)]",
           className,
         )}
         {...props}
@@ -98,7 +98,7 @@ export const BoxReveal = memo(function BoxReveal({
         initial="hidden"
         animate={slideControls}
         transition={{ duration: duration ?? 0.45, ease: "easeIn" }}
-        className="absolute inset-y-1 left-0 right-0 z-20 rounded bg-cyan-300"
+        className="absolute inset-y-1 left-0 right-0 z-20 rounded bg-[var(--accent)]"
       />
     </div>
   );
@@ -107,8 +107,8 @@ export const BoxReveal = memo(function BoxReveal({
 export function BottomGradient() {
   return (
     <>
-      <span className="absolute inset-x-0 -bottom-px block h-px w-full bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-0 transition duration-500 group-hover/btn:opacity-100" />
-      <span className="absolute inset-x-10 -bottom-px mx-auto block h-px w-1/2 bg-gradient-to-r from-transparent via-indigo-400 to-transparent opacity-0 blur-sm transition duration-500 group-hover/btn:opacity-100" />
+      <span className="absolute inset-x-0 -bottom-px block h-px w-full bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-500 group-hover/btn:opacity-100" />
+      <span className="absolute inset-x-10 -bottom-px mx-auto block h-px w-1/2 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 blur-sm transition duration-500 group-hover/btn:opacity-100" />
     </>
   );
 }
@@ -132,7 +132,7 @@ export function Ripple({
         return (
           <span
             key={index}
-            className="absolute animate-ripple rounded-full border border-white/15 bg-white/5"
+            className="absolute animate-ripple ripple-ring rounded-full border border-white/15 bg-white/5"
             style={{
               width: `${size}px`,
               height: `${size}px`,

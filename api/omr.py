@@ -3,9 +3,12 @@
 Dependencies are limited to opencv-python-headless and numpy so the
 uncompressed function stays within the Hobby 50MB envelope.
 
-Scoring uses fixed template coordinates after warping the 15 기표 rows
-(not the 인적사항 bar) onto the template cells.
-Do not re-detect the 15 기표 circles; Hough/grid overlay shifts them.
+Scoring uses fixed template coordinates after warping the printed table
+onto the template. The 2224x2868 overlay also snaps the 15 기표 rows.
+Wizard templates keep the stored circle ROIs (no row snap, no re-detect).
+
+Blank-form registration uses action=detect_circles on the same function.
+Detect printed empty rings inside the given ROI only; scoring never calls it.
 """
 
 from __future__ import annotations
@@ -34,8 +37,21 @@ HOLE_SCALE = 0.78
 FILL_CUT = 0.28
 ENGINE = "cell_circle_v1"
 MARK_ROWS = 15
+GIPYO_OVERLAY_WIDTH = 2224
+GIPYO_OVERLAY_HEIGHT = 2868
 # 인적사항 띠 위에 앉으면 p90 paper가 이보다 어둡다. 그 칸은 마킹이 아니다.
 BANNER_PAPER = 130.0
+
+# Blank-form ring detection (action=detect_circles). Never used on the score path.
+DETECT_MAX_SIDE = 1600
+DETECT_CIRCULARITY_MIN = 0.62
+DETECT_ASPECT_MIN = 0.72
+DETECT_ASPECT_MAX = 1.38
+DETECT_HOLE_AREA_MIN = 0.20
+DETECT_HOLE_AREA_MAX = 0.94
+DETECT_RADIUS_TOL = 0.34
+DETECT_RING_SCORE_MIN = 0.16
+DETECT_HOUGH_RING_MIN = 0.22
 
 # Measured circle placement inside a 기표 cell (152x101 → 42x42 at +93,+29.5).
 # Printed circle sits on the right of the cell, vertically centered.
@@ -315,10 +331,14 @@ def _warp(
 ) -> np.ndarray:
     width = int(template["image_width"])
     height = int(template["image_height"])
-    src_mode = "corner" if dest_mode in ("corner", "data_rows") else dest_mode
+    src_mode = "corner" if dest_mode in ("corner", "data_rows", "wizard_rows") else dest_mode
     src, dst_rel = _ordered_points(assigned, template["markers"], src_mode)
     if dest_mode == "data_rows":
         data = _data_row_corners(template)
+        if data is not None:
+            dst_rel = np.array([data[key] for key in ("tl", "tr", "br", "bl")], dtype=np.float32)
+    elif dest_mode == "wizard_rows":
+        data = _wizard_row_corners(template)
         if data is not None:
             dst_rel = np.array([data[key] for key in ("tl", "tr", "br", "bl")], dtype=np.float32)
     dst = np.column_stack((dst_rel[:, 0] * width, dst_rel[:, 1] * height)).astype(np.float32)
@@ -486,11 +506,34 @@ def _data_row_corners(template: dict[str, Any]) -> dict[str, tuple[float, float]
     }
 
 
-def _find_table_corners_from_lines(
+def _wizard_row_corners(template: dict[str, Any]) -> dict[str, tuple[float, float]] | None:
+    """Dest quad = the 기표 column the operator boxed (option cells), not the page."""
+    options = [
+        option
+        for question in template.get("questions") or []
+        for option in question.get("options") or []
+    ]
+    if len(options) < 2:
+        return None
+    x0 = min(_as_float(option["x"]) for option in options)
+    x1 = max(_as_float(option["x"]) + _as_float(option["w"]) for option in options)
+    y0 = _as_float(options[0]["y"])
+    y1 = _as_float(options[-1]["y"]) + _as_float(options[-1]["h"])
+    if y1 - y0 < 0.18 or (x1 - x0) < 0.02:
+        return None
+    return {
+        "tl": (x0, y0),
+        "tr": (x1, y0),
+        "br": (x1, y1),
+        "bl": (x0, y1),
+    }
+
+
+def _table_line_geometry(
     binary: np.ndarray,
     y_limit: int | None = None,
-) -> dict[str, tuple[float, float]] | None:
-    """15 기표 rows, including the thin 기표란 border. Stops at 인적사항."""
+) -> dict[str, Any] | None:
+    """15 기표 rows plus verticals. Stops at 인적사항."""
     height, width = binary.shape[:2]
     if y_limit is None:
         y_limit = int(height * 0.70)
@@ -540,10 +583,16 @@ def _find_table_corners_from_lines(
         if best_e - best_s >= 12:
             y_top = float(y_centers[best_s])
             y_bot = float(y_centers[best_e])
+    gipyo_left = float(x_left)
     if pitch >= 8 and len(strong_x) >= 2:
         last_span = strong_x[-1] - strong_x[-2]
         if last_span > pitch * 1.35:
             x_right = min(float(width) * 0.995, strong_x[-1] + pitch * 1.18)
+            gipyo_left = float(strong_x[-1])
+        elif (x_right - strong_x[-2]) <= (x_right - x_left) * 0.18:
+            gipyo_left = float(strong_x[-2])
+        else:
+            gipyo_left = max(float(x_left), float(x_right) - (x_right - x_left) * 0.09)
     if (x_right - x_left) < width * 0.35 or (y_bot - y_top) < height * 0.18:
         return None
     return {
@@ -551,6 +600,44 @@ def _find_table_corners_from_lines(
         "tr": (float(x_right), float(y_top)),
         "br": (float(x_right), float(y_bot)),
         "bl": (float(x_left), float(y_bot)),
+        "gipyo_left": float(gipyo_left),
+        "x_right": float(x_right),
+        "y_top": float(y_top),
+        "y_bot": float(y_bot),
+        "width": float(width),
+    }
+
+
+def _find_table_corners_from_lines(
+    binary: np.ndarray,
+    y_limit: int | None = None,
+) -> dict[str, tuple[float, float]] | None:
+    """15 기표 rows, including the thin 기표란 border. Stops at 인적사항."""
+    geometry = _table_line_geometry(binary, y_limit)
+    if geometry is None:
+        return None
+    return {key: geometry[key] for key in ("tl", "tr", "br", "bl")}
+
+
+def _find_gipyo_column_corners_from_lines(
+    binary: np.ndarray,
+    y_limit: int | None = None,
+) -> dict[str, tuple[float, float]] | None:
+    """Rightmost 기표란 column only. Wizard dest is that column, not the whole page."""
+    geometry = _table_line_geometry(binary, y_limit)
+    if geometry is None:
+        return None
+    x0 = geometry["gipyo_left"]
+    x1 = geometry["x_right"]
+    y0 = geometry["y_top"]
+    y1 = geometry["y_bot"]
+    if (x1 - x0) < geometry["width"] * 0.025:
+        return None
+    return {
+        "tl": (x0, y0),
+        "tr": (x1, y0),
+        "br": (x1, y1),
+        "bl": (x0, y1),
     }
 
 
@@ -558,6 +645,19 @@ def _scale_corners(
     corners: dict[str, tuple[float, float]], scale: float
 ) -> dict[str, tuple[float, float]]:
     return {key: (point[0] / scale, point[1] / scale) for key, point in corners.items()}
+
+
+def _option_count(template: dict[str, Any]) -> int:
+    return sum(len(question.get("options") or []) for question in template.get("questions") or [])
+
+
+def _is_gipyo_overlay(template: dict[str, Any]) -> bool:
+    """신사2동 15칸 오버레이만 표선 워프·기표 행 스냅을 쓴다. 마법사 양식은 저장한 원 좌표를 그대로 쓴다."""
+    return (
+        _option_count(template) == MARK_ROWS
+        and int(_as_float(template.get("image_width"), 0)) == GIPYO_OVERLAY_WIDTH
+        and int(_as_float(template.get("image_height"), 0)) == GIPYO_OVERLAY_HEIGHT
+    )
 
 
 def _align_scan(
@@ -572,20 +672,34 @@ def _align_scan(
     height = int(template["image_height"])
     attempts: list[tuple[str, dict[str, tuple[float, float]]]] = []
 
-    y_limit = _banner_top(working_gray) if working_gray is not None else None
-    from_lines = _find_table_corners_from_lines(working_binary, y_limit)
-    if from_lines is not None:
-        attempts.append(("table_lines", _scale_corners(from_lines, scale)))
-    from_quad = _find_table_quad(working_binary)
-    if from_quad is not None:
-        attempts.append(("table_contour", _scale_corners(from_quad, scale)))
+    if _is_gipyo_overlay(template):
+        y_limit = _banner_top(working_gray) if working_gray is not None else None
+        from_lines = _find_table_corners_from_lines(working_binary, y_limit)
+        if from_lines is not None:
+            attempts.append(("table_lines", _scale_corners(from_lines, scale)))
+        from_quad = _find_table_quad(working_binary)
+        if from_quad is not None:
+            attempts.append(("table_contour", _scale_corners(from_quad, scale)))
 
-    for name, assigned in attempts:
-        try:
-            dest_mode = "data_rows" if name.startswith("table_") else "center"
-            return _warp(gray, assigned, template, dest_mode), assigned, name
-        except OmrError:
-            continue
+        for name, assigned in attempts:
+            try:
+                dest_mode = "data_rows" if name.startswith("table_") else "center"
+                return _warp(gray, assigned, template, dest_mode), assigned, name
+            except OmrError:
+                continue
+
+    # Wizard templates: warp the scan's 기표 column onto the boxed option cells.
+    # Mapping the whole table onto page-corner markers stretches holes to the
+    # right edge (~0.96) while saved circles sit at ~0.91 — every mark misses.
+    if not _is_gipyo_overlay(template) and _wizard_row_corners(template) is not None:
+        y_limit = _banner_top(working_gray) if working_gray is not None else None
+        from_column = _find_gipyo_column_corners_from_lines(working_binary, y_limit)
+        if from_column is not None:
+            try:
+                assigned = _scale_corners(from_column, scale)
+                return _warp(gray, assigned, template, "wizard_rows"), assigned, "gipyo_column"
+            except OmrError:
+                pass
 
     # PDF overlay / already-aligned sheet: do not snap to random dark squares.
     if gray.shape[0] == height and gray.shape[1] == width:
@@ -597,15 +711,17 @@ def _align_scan(
         }
         return gray, assigned, "identity"
 
-    try:
-        candidates = _collect_candidates(working_binary, "square")
-        assigned_small = _assign_markers(
-            candidates, template["markers"], working_binary.shape[1], working_binary.shape[0]
-        )
-        assigned = _scale_corners(assigned_small, scale)
-        return _warp(gray, assigned, template), assigned, "markers"
-    except OmrError:
-        pass
+    # Wizard templates store circles on the full page. Do not pick random dark blobs.
+    if _is_gipyo_overlay(template):
+        try:
+            candidates = _collect_candidates(working_binary, "square")
+            assigned_small = _assign_markers(
+                candidates, template["markers"], working_binary.shape[1], working_binary.shape[0]
+            )
+            assigned = _scale_corners(assigned_small, scale)
+            return _warp(gray, assigned, template), assigned, "markers"
+        except OmrError:
+            pass
 
     warped = cv2.resize(gray, (width, height), interpolation=cv2.INTER_AREA)
     assigned = {
@@ -851,7 +967,10 @@ def process_scan(image_base64: Any, template: Any) -> dict[str, Any]:
     working, scale = _downscale(gray)
     binary = _binarize(working)
     warped, assigned, alignment = _align_scan(gray, binary, scale, template, working)
-    template, cell_source = _lock_gipyo_cells(template, warped)
+    if _is_gipyo_overlay(template):
+        template, cell_source = _lock_gipyo_cells(template, warped)
+    else:
+        cell_source = "template"
 
     measured: list[tuple[dict[str, Any], dict[str, Any]]] = []
     for question in template["questions"]:
@@ -973,6 +1092,376 @@ def process_scan(image_base64: Any, template: Any) -> dict[str, Any]:
     }
 
 
+def _validate_detect_region(region: Any) -> dict[str, float]:
+    if not isinstance(region, dict):
+        raise OmrError(400, "ROI_OUT_OF_BOUNDS", "문항 영역이 올바르지 않습니다.")
+    for key in ("x", "y", "w", "h"):
+        if key not in region:
+            raise OmrError(400, "ROI_OUT_OF_BOUNDS", "문항 영역 좌표가 불완전합니다.")
+    x = _as_float(region["x"])
+    y = _as_float(region["y"])
+    w = _as_float(region["w"])
+    h = _as_float(region["h"])
+    if w <= 0 or h <= 0:
+        raise OmrError(400, "ROI_OUT_OF_BOUNDS", "문항 영역 크기가 유효하지 않습니다.")
+    if x >= 1.0 or y >= 1.0 or (x + w) <= 0.0 or (y + h) <= 0.0:
+        raise OmrError(400, "ROI_OUT_OF_BOUNDS")
+    return {"x": x, "y": y, "w": w, "h": h}
+
+
+def _binarize_rings(gray: np.ndarray) -> np.ndarray:
+    """Adaptive ink mask that keeps ring holes open (no close)."""
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    side = min(gray.shape[:2])
+    block = 31
+    if side < 80:
+        block = 11
+    elif side < 160:
+        block = 21
+    if block % 2 == 0:
+        block += 1
+    binary = cv2.adaptiveThreshold(
+        blurred,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        block,
+        6,
+    )
+    kernel = np.ones((2, 2), np.uint8)
+    return cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+
+
+def _detect_working_roi(gray: np.ndarray) -> tuple[np.ndarray, float]:
+    height, width = gray.shape[:2]
+    side = max(height, width)
+    if side <= DETECT_MAX_SIDE:
+        return gray, 1.0
+    scale = DETECT_MAX_SIDE / float(side)
+    resized = cv2.resize(
+        gray,
+        (max(1, int(width * scale)), max(1, int(height * scale))),
+        interpolation=cv2.INTER_AREA,
+    )
+    return resized, scale
+
+
+def _hole_area(contours: list[np.ndarray], hierarchy: np.ndarray, child_i: int) -> float:
+    total = 0.0
+    index = int(child_i)
+    while index >= 0:
+        total += float(cv2.contourArea(contours[index]))
+        index = int(hierarchy[index][0])
+    return total
+
+
+def _empty_ring_score(gray: np.ndarray, cx: float, cy: float, radius: float) -> float:
+    """Paper-bright hole vs dark annulus. Filled blobs and table lines score low."""
+    r = max(2.0, radius)
+    pad = int(np.ceil(r * 1.25)) + 1
+    x0 = max(0, int(round(cx)) - pad)
+    y0 = max(0, int(round(cy)) - pad)
+    x1 = min(gray.shape[1], int(round(cx)) + pad + 1)
+    y1 = min(gray.shape[0], int(round(cy)) + pad + 1)
+    crop = gray[y0:y1, x0:x1]
+    if crop.size == 0:
+        return 0.0
+    yy, xx = np.ogrid[: crop.shape[0], : crop.shape[1]]
+    dist = np.sqrt((xx - (cx - x0)) ** 2 + (yy - (cy - y0)) ** 2)
+    inner = dist <= r * 0.52
+    ring = (dist >= r * 0.72) & (dist <= r * 1.10)
+    if int(np.count_nonzero(inner)) < 8 or int(np.count_nonzero(ring)) < 8:
+        return 0.0
+    inner_mean = float(np.mean(crop[inner]))
+    ring_mean = float(np.mean(crop[ring]))
+    contrast = (inner_mean - ring_mean) / 255.0
+    return float(np.clip(contrast * 1.35, 0.0, 1.0))
+
+
+def _radius_mode(radii: list[float]) -> float:
+    if not radii:
+        return 0.0
+    arr = np.array(radii, dtype=np.float64)
+    if arr.size == 1:
+        return float(arr[0])
+    median = float(np.median(arr))
+    bin_w = max(1.0, median * 0.08)
+    lo = float(arr.min()) - bin_w
+    hi = float(arr.max()) + 2.0 * bin_w
+    bins = np.arange(lo, hi, bin_w)
+    if bins.size < 2:
+        return median
+    hist, edges = np.histogram(arr, bins=bins)
+    peak = int(np.argmax(hist))
+    in_peak = arr[(arr >= edges[peak]) & (arr < edges[peak + 1])]
+    if in_peak.size:
+        return float(np.mean(in_peak))
+    return median
+
+
+def _nms_circles(
+    items: list[tuple[float, float, float, float]], min_dist: float
+) -> list[tuple[float, float, float, float]]:
+    ordered = sorted(items, key=lambda item: item[3], reverse=True)
+    kept: list[tuple[float, float, float, float]] = []
+    dist_sq = max(4.0, min_dist) ** 2
+    for cx, cy, radius, score in ordered:
+        too_close = False
+        for kx, ky, _kr, _ks in kept:
+            if (cx - kx) ** 2 + (cy - ky) ** 2 < dist_sq:
+                too_close = True
+                break
+        if not too_close:
+            kept.append((cx, cy, radius, score))
+    return kept
+
+
+def _snap_circles_to_grid(
+    items: list[tuple[float, float, float, float]],
+) -> list[tuple[float, float, float, float]]:
+    if len(items) < 2:
+        return sorted(items, key=lambda item: (item[1], item[0]))
+
+    r_mode = _radius_mode([item[2] for item in items])
+    diam = max(2.0, r_mode * 2.0)
+    x_sorted = sorted(items, key=lambda item: item[0])
+    columns: list[list[tuple[float, float, float, float]]] = []
+    current = [x_sorted[0]]
+    for item in x_sorted[1:]:
+        col_x = float(np.mean([entry[0] for entry in current]))
+        if item[0] - col_x > diam * 0.85:
+            columns.append(current)
+            current = [item]
+        else:
+            current.append(item)
+    columns.append(current)
+
+    snapped: list[tuple[float, float, float, float]] = []
+    for column in columns:
+        col_x = float(np.median([item[0] for item in column]))
+        column = sorted(column, key=lambda item: item[1])
+        ys = [item[1] for item in column]
+        pitch = 0.0
+        if len(column) >= 2:
+            gaps = [float(gap) for gap in np.diff(np.array(ys, dtype=np.float64)) if gap >= diam * 0.55]
+            if gaps:
+                pitch = float(np.median(gaps))
+                if len(gaps) >= 2 and float(np.std(gaps)) > pitch * 0.40:
+                    pitch = 0.0
+
+        used: dict[int, tuple[float, float, float, float]] = {}
+        y0 = ys[0]
+        for _cx, cy, radius, score in column:
+            if pitch >= diam * 0.55:
+                slot = int(round((cy - y0) / pitch))
+                snap_y = y0 + slot * pitch
+            else:
+                slot = len(used)
+                snap_y = cy
+            snapped_r = r_mode if r_mode > 0 else radius
+            candidate = (col_x, snap_y, snapped_r, score)
+            prev = used.get(slot)
+            if prev is None or candidate[3] > prev[3]:
+                used[slot] = candidate
+        snapped.extend(used.values())
+
+    return sorted(snapped, key=lambda item: (item[1], item[0]))
+
+
+def _contour_ring_candidates(
+    binary: np.ndarray,
+    gray: np.ndarray,
+    min_r: float,
+    max_r: float,
+) -> tuple[list[tuple[float, float, float, float]], int]:
+    contours, hierarchy = cv2.findContours(binary, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+    if hierarchy is None or len(contours) == 0:
+        return [], 0
+
+    hier = hierarchy[0]
+    found: list[tuple[float, float, float, float]] = []
+    rejected = 0
+    height, width = binary.shape[:2]
+
+    for index, contour in enumerate(contours):
+        _next_i, _prev_i, child_i, parent_i = (int(v) for v in hier[index])
+        if parent_i != -1:
+            continue
+
+        area = float(cv2.contourArea(contour))
+        if area < 12.0:
+            continue
+        peri = cv2.arcLength(contour, True)
+        if peri <= 0:
+            continue
+        circularity = 4.0 * np.pi * area / (peri * peri)
+        bx, by, bw, bh = cv2.boundingRect(contour)
+        if bw < 4 or bh < 4:
+            rejected += 1
+            continue
+        aspect = bw / float(bh)
+        (cx, cy), radius = cv2.minEnclosingCircle(contour)
+        if not (min_r <= radius <= max_r):
+            rejected += 1
+            continue
+        if cx < 0 or cy < 0 or cx >= width or cy >= height:
+            rejected += 1
+            continue
+        if circularity < DETECT_CIRCULARITY_MIN or aspect < DETECT_ASPECT_MIN or aspect > DETECT_ASPECT_MAX:
+            rejected += 1
+            continue
+        if child_i < 0:
+            rejected += 1
+            continue
+        hole = _hole_area(contours, hier, child_i)
+        hole_ratio = hole / area if area > 0 else 0.0
+        if hole_ratio < DETECT_HOLE_AREA_MIN or hole_ratio > DETECT_HOLE_AREA_MAX:
+            rejected += 1
+            continue
+        ring = _empty_ring_score(gray, float(cx), float(cy), float(radius))
+        if ring < DETECT_RING_SCORE_MIN:
+            rejected += 1
+            continue
+
+        circ_term = min(1.0, float(circularity) / 0.90)
+        hole_term = float(np.clip((hole_ratio - DETECT_HOLE_AREA_MIN) / 0.70, 0.0, 1.0))
+        score = float(np.clip(0.35 * circ_term + 0.25 * hole_term + 0.40 * ring, 0.0, 1.0))
+        found.append((float(cx), float(cy), float(radius), score))
+
+    return found, rejected
+
+
+def _hough_ring_candidates(
+    gray: np.ndarray,
+    min_r: float,
+    max_r: float,
+    min_dist: float,
+) -> tuple[list[tuple[float, float, float, float]], int]:
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    circles = cv2.HoughCircles(
+        blurred,
+        cv2.HOUGH_GRADIENT,
+        dp=1.2,
+        minDist=max(8.0, float(min_dist)),
+        param1=70,
+        param2=18,
+        minRadius=max(4, int(round(min_r))),
+        maxRadius=max(5, int(round(max_r))),
+    )
+    if circles is None:
+        return [], 0
+
+    found: list[tuple[float, float, float, float]] = []
+    rejected = 0
+    height, width = gray.shape[:2]
+    for cx, cy, radius in circles[0]:
+        if not (min_r <= float(radius) <= max_r):
+            rejected += 1
+            continue
+        if cx < 0 or cy < 0 or cx >= width or cy >= height:
+            rejected += 1
+            continue
+        ring = _empty_ring_score(gray, float(cx), float(cy), float(radius))
+        if ring < DETECT_HOUGH_RING_MIN:
+            rejected += 1
+            continue
+        score = float(np.clip(0.62 * ring + 0.18, 0.0, 0.92))
+        found.append((float(cx), float(cy), float(radius), score))
+    return found, rejected
+
+
+def _to_relative_circles(
+    items: list[tuple[float, float, float, float]],
+    roi_x0: int,
+    roi_y0: int,
+    scale: float,
+    image_width: int,
+    image_height: int,
+) -> list[dict[str, float]]:
+    circles: list[dict[str, float]] = []
+    inv = 1.0 / scale if scale > 0 else 1.0
+    for cx, cy, radius, score in items:
+        px = roi_x0 + cx * inv
+        py = roi_y0 + cy * inv
+        pr = radius * inv
+        x = (px - pr) / float(image_width)
+        y = (py - pr) / float(image_height)
+        w = (2.0 * pr) / float(image_width)
+        h = (2.0 * pr) / float(image_height)
+        x = max(0.0, min(1.0, x))
+        y = max(0.0, min(1.0, y))
+        w = max(1e-6, min(1.0 - x, w))
+        h = max(1e-6, min(1.0 - y, h))
+        circles.append(
+            {
+                "x": round(x, 6),
+                "y": round(y, 6),
+                "w": round(w, 6),
+                "h": round(h, 6),
+                "score": round(max(0.0, min(1.0, score)), 4),
+            }
+        )
+    return circles
+
+
+def process_detect_circles(image_base64: Any, region: Any) -> dict[str, Any]:
+    """Blank-form ROI → printed empty rings as relative boxes. Score path does not call this."""
+    region = _validate_detect_region(region)
+    image = _decode_image(image_base64)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    height, width = gray.shape[:2]
+    x0, y0, x1, y1 = _rel_box(region, width, height)
+    roi = gray[y0:y1, x0:x1]
+    if roi.size == 0:
+        raise OmrError(400, "ROI_OUT_OF_BOUNDS")
+
+    working, scale = _detect_working_roi(roi)
+    wh, ww = working.shape[:2]
+    min_side = float(min(wh, ww))
+    # Loose bounds so a wide question box still sees small printed rings.
+    # Radius mode after detection drops specks and table-line leftovers.
+    min_r = max(4.0, min_side * 0.004)
+    max_r = max(min_r + 1.0, min_side * 0.52)
+
+    binary = _binarize_rings(working)
+    contour_items, contour_rejected = _contour_ring_candidates(binary, working, min_r, max_r)
+
+    radii_hint = [item[2] for item in contour_items]
+    if radii_hint:
+        mode = _radius_mode(radii_hint)
+        if mode > 0:
+            min_r = max(min_r, mode * (1.0 - DETECT_RADIUS_TOL))
+            max_r = min(max_r, mode * (1.0 + DETECT_RADIUS_TOL))
+
+    hough_items, hough_rejected = _hough_ring_candidates(
+        working, min_r, max_r, min_dist=max(8.0, min_r * 1.8)
+    )
+
+    merged = contour_items + hough_items
+    rejected = contour_rejected + hough_rejected
+    if not merged:
+        return {"circles": [], "rejected_count": int(rejected)}
+
+    r_mode = _radius_mode([item[2] for item in merged])
+    filtered: list[tuple[float, float, float, float]] = []
+    for cx, cy, radius, score in merged:
+        if r_mode > 0 and abs(radius - r_mode) / r_mode > DETECT_RADIUS_TOL:
+            rejected += 1
+            continue
+        agree = 1.0
+        if r_mode > 0:
+            agree = 1.0 - min(1.0, abs(radius - r_mode) / max(r_mode, 1e-6) / DETECT_RADIUS_TOL)
+        filtered.append((cx, cy, radius, float(np.clip(score * (0.72 + 0.28 * agree), 0.0, 1.0))))
+
+    nms_dist = max(6.0, (r_mode if r_mode > 0 else min_r) * 1.35)
+    deduped = _nms_circles(filtered, nms_dist)
+    rejected += max(0, len(filtered) - len(deduped))
+    snapped = _snap_circles_to_grid(deduped)
+    rejected += max(0, len(deduped) - len(snapped))
+    circles = _to_relative_circles(snapped, x0, y0, scale, width, height)
+    return {"circles": circles, "rejected_count": int(rejected)}
+
+
 class handler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
         return
@@ -1020,7 +1509,13 @@ class handler(BaseHTTPRequestHandler):
             if not isinstance(body, dict):
                 raise OmrError(400, "INVALID_TEMPLATE")
 
-            result = process_scan(body.get("image_base64"), body.get("template") or {})
+            action = body.get("action")
+            if isinstance(action, str):
+                action = action.strip()
+            if action == "detect_circles":
+                result = process_detect_circles(body.get("image_base64"), body.get("region"))
+            else:
+                result = process_scan(body.get("image_base64"), body.get("template") or {})
             self._send(200, result)
         except OmrError as exc:
             self._send(

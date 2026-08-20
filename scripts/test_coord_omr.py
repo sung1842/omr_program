@@ -83,6 +83,27 @@ def main() -> None:
     if result["sheet_status"] != "ok":
         raise SystemExit(f"sheet should be ok, got {result['sheet_status']}")
 
+    # Same relative circles as the seed, but not 2224x2868 — this is a wizard clone.
+    # Copier-like margins used to stretch via resize and miss the holes.
+    wizard_template = build_template()
+    wizard_template["image_width"] = 1800
+    wizard_template["image_height"] = 2321
+    pad = 80
+    padded = np.full((HEIGHT + pad * 2, WIDTH + pad * 2, 3), 245, dtype=np.uint8)
+    padded[pad : pad + HEIGHT, pad : pad + WIDTH] = image
+    wizard_result = omr.process_scan(encode(padded), wizard_template)
+    wizard_picked = selected_labels(wizard_result)
+    wizard_align = wizard_result["details"]["alignment"]
+    print("wizard clone", wizard_align, wizard_result["answers"])
+    if wizard_picked != expected:
+        raise SystemExit(
+            f"wizard clone expected {sorted(expected)}, got {sorted(wizard_picked)} "
+            f"(alignment={wizard_align})"
+        )
+    if wizard_align not in ("gipyo_column", "table_lines"):
+        raise SystemExit("wizard clone should warp the 기표 column, not stretch the whole page")
+    print("wizard clone with margins ok")
+
     # Overflow: two 특화 marks → exception, but both still counted as selected.
     overflow = blank_form()
     fill_hole(overflow, 0)

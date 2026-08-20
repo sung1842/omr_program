@@ -419,13 +419,13 @@ export default function TemplateEditor({ initial }: Props) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,18.75rem)_minmax(0,1fr)]">
-      <section className="space-y-4 rounded-lg border border-line bg-paper-strong p-4">
+      <section className="space-y-4 rounded-lg border border-line bg-paper p-4">
         <label className="block text-sm">
           양식 이름
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            className="mt-1 w-full rounded border border-line bg-white px-3 py-2"
+            className="mt-1 w-full rounded border border-line bg-paper-strong px-3 py-2"
           />
         </label>
         <button
@@ -458,7 +458,7 @@ export default function TemplateEditor({ initial }: Props) {
           <select
             value={shape}
             onChange={(event) => setShape(event.target.value as MarkerShape)}
-            className="mt-1 w-full rounded border border-line bg-white px-3 py-2"
+            className="mt-1 w-full rounded border border-line bg-paper-strong px-3 py-2"
           >
             <option value="square">사각형</option>
             <option value="circle">원형</option>
@@ -484,21 +484,21 @@ export default function TemplateEditor({ initial }: Props) {
           <button
             type="button"
             onClick={() => setMode("marker")}
-            className={`flex-1 rounded px-2 py-2 text-sm ${mode === "marker" ? "bg-navy text-white" : "border border-line"}`}
+            className={`flex-1 rounded px-2 py-2 text-sm ${mode === "marker" ? "bg-navy text-paper-strong" : "border border-line"}`}
           >
             표 모서리 {markers.length}/{MAX_MARKERS}
           </button>
           <button
             type="button"
             onClick={() => setMode("cell")}
-            className={`flex-1 rounded px-2 py-2 text-sm ${mode === "cell" ? "bg-navy text-white" : "border border-line"}`}
+            className={`flex-1 rounded px-2 py-2 text-sm ${mode === "cell" ? "bg-navy text-paper-strong" : "border border-line"}`}
           >
             기표 칸
           </button>
           <button
             type="button"
             onClick={() => setMode("circle")}
-            className={`flex-1 rounded px-2 py-2 text-sm ${mode === "circle" ? "bg-navy text-white" : "border border-line"}`}
+            className={`flex-1 rounded px-2 py-2 text-sm ${mode === "circle" ? "bg-navy text-paper-strong" : "border border-line"}`}
           >
             원
           </button>
@@ -507,7 +507,7 @@ export default function TemplateEditor({ initial }: Props) {
           기준점은 표 외곽 네 모서리입니다. 기표는 칸(cell)과 그 안 원(circle)만 씁니다.
           선택 여부는 원 안 채움으로 보고, 특화·시설 2개 이상·일반 5개 이상은 개수 예외입니다.
         </p>
-        <ul className="space-y-1 rounded border border-line bg-white px-3 py-2 text-[0.6875rem] text-muted">
+        <ul className="space-y-1 rounded border border-line bg-paper-strong px-3 py-2 text-[0.6875rem] text-muted">
           <li>설문지 {image ? "업로드됨" : "필요"}</li>
           <li>표 모서리 {markers.length}/4</li>
           {VILLAGE_AGENDA_FORM.questions.map((spec) => {
@@ -548,7 +548,7 @@ export default function TemplateEditor({ initial }: Props) {
                   </span>
                 </button>
                 {activeQuestionId === question.id ? (
-                  <div className="space-y-2 rounded border border-line bg-white p-2">
+                  <div className="space-y-2 rounded border border-line bg-paper-strong p-2">
                     <label className="block text-xs">
                       최대 선택
                       <input
@@ -601,7 +601,7 @@ export default function TemplateEditor({ initial }: Props) {
           type="button"
           disabled={saving}
           onClick={save}
-          className="w-full rounded bg-navy px-4 py-2.5 text-sm text-white disabled:opacity-50"
+          className="w-full rounded bg-navy px-4 py-2.5 text-sm text-paper-strong disabled:opacity-50"
         >
           {saving ? "저장 중..." : "템플릿 저장"}
         </button>

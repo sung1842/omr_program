@@ -1,0 +1,23 @@
+---
+description: For new or restyled UI, search 21st.dev first then adapt into the project. Skip for logic-only and OMR scoring work.
+alwaysApply: true
+---
+
+# 21st.dev for UI work
+
+When the user asks to create, restyle, or add UI (screens, buttons, dialogs, cards, login, empty states, chrome), use the `user-21st` MCP **before** hand-rolling a new visual component.
+
+Do **not** call 21st for scan scoring, Excel, Supabase, geometry, circle detection, or small copy/layout tweaks to an existing component.
+
+## Workflow
+
+1. Discover: `search` for your own lookup, or `search_picker` when the user should choose. Prefer `type: "component"` for React/shadcn UI.
+2. Match: if a result is close enough, `get_component` with its `id` (demo id). Check `locked` / `found` before treating output as source. Adapt into this repo (existing Tailwind/shadcn, no extra design system).
+3. No match: `generate` with a concrete prompt. Share the returned `url`. Do not invent a parallel component while generation is running.
+4. Themes: `get_theme` for CSS tokens. Templates have no fetchable code — open `url`.
+
+## Constraints
+
+- `get_component` and `generate` consume daily quota on the free tier. Search and metadata tools are free. Do not retrieve code or generate for every tiny tweak.
+- Form wizard: restyle `FormWizard` chrome only. Do not replace Konva canvas, markers, or detect-circles flow with 21st components.
+- Fit the current page; do not add a second UI kit or unused dependencies.

@@ -189,7 +189,7 @@ export function ExceptionPanel({ active = true }: { active?: boolean }) {
 
       <div className="grid min-h-0 gap-3 lg:grid-cols-[minmax(13rem,18rem)_minmax(0,1fr)]">
         <section className="max-h-[28rem] overflow-y-auto rounded-xl border border-white/10 bg-white/5 lg:max-h-[calc(100dvh-16rem)]">
-          <p className="sticky top-0 z-10 border-b border-white/10 bg-black/50 px-3 py-2 text-[10px] tracking-wide text-white/45 backdrop-blur">
+          <p className="sticky top-0 z-10 border-b border-white/10 bg-black/50 px-3 py-2 text-[10px] tracking-wide text-white/45 backdrop-blur [[data-theme=light]_&]:bg-paper-strong">
             {tab === "queue" ? "예외 목록" : "처리 완료 로그"}
           </p>
           {list.length === 0 ? (

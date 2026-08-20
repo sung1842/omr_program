@@ -28,7 +28,7 @@ export function CinematicLogin() {
   const mouseY = useMotionValue(0.5);
   const glowX = useSpring(useTransform(mouseX, [0, 1], [20, 80]), { stiffness: 80, damping: 18 });
   const glowY = useSpring(useTransform(mouseY, [0, 1], [18, 72]), { stiffness: 80, damping: 18 });
-  const spotlight = useMotionTemplate`radial-gradient(42rem circle at ${glowX}% ${glowY}%, rgba(103,232,249,0.16), transparent 55%)`;
+  const spotlight = useMotionTemplate`radial-gradient(42rem circle at ${glowX}% ${glowY}%, var(--spot-glow), transparent 55%)`;
 
   function onPointerMove(event: MouseEvent<HTMLDivElement>) {
     const bounds = stageRef.current?.getBoundingClientRect();
@@ -79,13 +79,13 @@ export function CinematicLogin() {
     >
       <video
         src={LOGIN_VIDEO}
-        className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70"
+        className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 [[data-theme=light]_&]:opacity-40"
         autoPlay
         muted
         loop
         playsInline
       />
-      <div className="absolute inset-0 bg-gradient-to-br from-black via-black/75 to-cyan-950/40" />
+      <div className="login-scrim absolute inset-0" />
       <motion.div className="absolute inset-0" style={{ background: spotlight }} />
       <FilmGrain />
       <div className="absolute right-4 top-4 z-40 sm:right-6 sm:top-6">
@@ -96,7 +96,7 @@ export function CinematicLogin() {
         <div className="relative hidden min-h-[26.25rem] items-center lg:flex">
           <Ripple className="opacity-70" />
           <div className="relative z-10 max-w-md">
-            <p className="font-mono text-[0.6875rem] tracking-[0.22em] text-cyan-200/80">PAPER OMR</p>
+            <p className="brand-mark font-mono text-[0.6875rem] tracking-[0.22em]">PAPER OMR</p>
             <h2 className="mt-3 text-[clamp(1.75rem,4vw,2.25rem)] font-semibold tracking-tight">종이 설문,<br />바로 집계</h2>
             <p className="mt-4 text-sm leading-6 text-white/65">
               관리자만 접속할 수 있는 내부 집계 시스템입니다.
@@ -112,10 +112,10 @@ export function CinematicLogin() {
         >
           <form
             onSubmit={onSubmit}
-            className="rounded-3xl border border-white/12 bg-black/45 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:p-8"
+            className="rounded-3xl border border-white/12 bg-black/45 p-5 shadow-[var(--elev-shadow-lg)] backdrop-blur-xl sm:p-8 [[data-theme=light]_&]:border-[#eadfd8] [[data-theme=light]_&]:bg-[#fffdfb]/82"
           >
             <BoxReveal>
-              <p className="font-mono text-[0.6875rem] tracking-[0.22em] text-cyan-200/80">PAPER OMR</p>
+              <p className="brand-mark font-mono text-[0.6875rem] tracking-[0.22em]">PAPER OMR</p>
             </BoxReveal>
             <BoxReveal className="mt-3">
               <h1 className="text-[clamp(1.5rem,4vw,1.875rem)] font-semibold tracking-tight">관리자 로그인</h1>
@@ -167,7 +167,7 @@ export function CinematicLogin() {
               <button
                 type="submit"
                 disabled={pending}
-                className="group/btn relative block h-11 w-full rounded-xl bg-gradient-to-br from-white to-white/80 text-sm font-medium text-black disabled:opacity-50"
+                className="group/btn relative block h-11 w-full rounded-xl bg-gradient-to-br from-[#f4f1ea] to-[#f4f1ea]/80 text-sm font-medium text-[#05070c] disabled:opacity-50 [[data-theme=light]_&]:from-[#d96b5e] [[data-theme=light]_&]:to-[#e08a7d] [[data-theme=light]_&]:text-[#fffdfb]"
               >
                 {pending ? "처리 중..." : "로그인 →"}
                 <BottomGradient />
