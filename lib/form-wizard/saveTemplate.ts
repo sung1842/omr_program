@@ -116,11 +116,20 @@ export async function deleteWizardTemplate(id: string) {
   if (resultsError) {
     throw resultsError;
   }
-  const sheetPaths = [
-    ...new Set(
-      (results ?? []).flatMap((row) => [row.source_path, row.image_path]).filter((path): path is string => Boolean(path)),
+  const sheetPaths = Array.from(
+    new Set<string>(
+      (results ?? []).flatMap((row: { source_path: string | null; image_path: string | null }) => {
+        const paths: string[] = [];
+        if (row.source_path) {
+          paths.push(row.source_path);
+        }
+        if (row.image_path) {
+          paths.push(row.image_path);
+        }
+        return paths;
+      }),
     ),
-  ];
+  );
   await removeScanSheets(supabase, sheetPaths);
 
   const { error: deleteResultsError } = await supabase.from("scan_results").delete().eq("template_id", id);
