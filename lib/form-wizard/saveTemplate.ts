@@ -1,5 +1,5 @@
 import { DEFAULT_TEMPLATE_NAME } from "@/lib/defaultTemplate";
-import { emitTemplatesChanged } from "@/lib/scanEvents";
+import { emitScanResultsChanged, emitTemplatesChanged } from "@/lib/scanEvents";
 import { removeScanSheets } from "@/lib/sheetStorage";
 import { createClient } from "@/lib/supabase/client";
 import type { TemplatePayload, TemplateRow } from "@/lib/types";
@@ -110,15 +110,18 @@ export async function deleteWizardTemplate(id: string) {
 
   const { data: results, error: resultsError } = await supabase
     .from("scan_results")
-    .select("source_path")
-    .eq("template_id", id);
+    .select("source_path, image_path")
+    .eq("template_id", id)
+    .range(0, 9999);
   if (resultsError) {
     throw resultsError;
   }
-  await removeScanSheets(
-    supabase,
-    (results ?? []).map((row) => row.source_path).filter((path): path is string => Boolean(path)),
-  );
+  const sheetPaths = [
+    ...new Set(
+      (results ?? []).flatMap((row) => [row.source_path, row.image_path]).filter((path): path is string => Boolean(path)),
+    ),
+  ];
+  await removeScanSheets(supabase, sheetPaths);
 
   const { error: deleteResultsError } = await supabase.from("scan_results").delete().eq("template_id", id);
   if (deleteResultsError) {
@@ -134,4 +137,5 @@ export async function deleteWizardTemplate(id: string) {
   }
   clearActiveTemplate(id);
   emitTemplatesChanged();
+  emitScanResultsChanged();
 }

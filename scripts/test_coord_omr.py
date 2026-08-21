@@ -104,6 +104,17 @@ def main() -> None:
         raise SystemExit("wizard clone should warp the 기표 column, not stretch the whole page")
     print("wizard clone with margins ok")
 
+    missing_facility = blank_form()
+    fill_hole(missing_facility, 0)  # 우리마을
+    fill_hole(missing_facility, 4)  # 일반3
+    fill_hole(missing_facility, 6)  # 일반5
+    missing_result = omr.process_scan(encode(missing_facility), template)
+    if missing_result["sheet_status"] != "exception":
+        raise SystemExit("시설 미선택은 예외여야 합니다")
+    if not any("시설" in str(item.get("message", "")) for item in missing_result["exception_reasons"]):
+        raise SystemExit(f"expected 시설 min_select exception, got {missing_result['exception_reasons']}")
+    print("missing 시설 is exception ok")
+
     # Overflow: two 특화 marks → exception, but both still counted as selected.
     overflow = blank_form()
     fill_hole(overflow, 0)

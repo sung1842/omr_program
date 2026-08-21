@@ -67,7 +67,7 @@ def mark_row(index: int):
 
 
 def build_template():
-    groups = [(1, "프로그램 사업 특화", 0, 2, 0, 1), (2, "프로그램 사업 일반", 2, 12, 0, 4), (3, "시설 사업", 12, 15, 0, 1)]
+    groups = [(1, "프로그램 사업 특화", 0, 2, 1, 1), (2, "프로그램 사업 일반", 2, 12, 1, 4), (3, "시설 사업", 12, 15, 1, 1)]
     questions = []
     for number, label, start, end, min_select, max_select in groups:
         options = []

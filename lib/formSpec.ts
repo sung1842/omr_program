@@ -25,7 +25,7 @@ export const VILLAGE_AGENDA_FORM = {
       number: 1,
       label: "프로그램 사업 특화",
       type: "multi",
-      min_select: 0,
+      min_select: 1,
       max_select: 1,
       on_overflow: "exception",
       options: [
@@ -43,7 +43,7 @@ export const VILLAGE_AGENDA_FORM = {
       number: 2,
       label: "프로그램 사업 일반",
       type: "multi",
-      min_select: 0,
+      min_select: 1,
       max_select: 4,
       on_overflow: "exception",
       options: [
@@ -63,7 +63,7 @@ export const VILLAGE_AGENDA_FORM = {
       number: 3,
       label: "시설 사업",
       type: "multi",
-      min_select: 0,
+      min_select: 1,
       max_select: 1,
       on_overflow: "exception",
       options: [

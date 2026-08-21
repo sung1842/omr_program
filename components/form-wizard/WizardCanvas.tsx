@@ -3,7 +3,7 @@
 import type { KonvaEventObject } from "konva/lib/Node";
 import type Konva from "konva";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Circle, Layer, Rect, Stage, Text, Transformer, Image as KonvaImage } from "react-konva";
+import { Circle, Group, Layer, Rect, Stage, Text, Transformer, Image as KonvaImage } from "react-konva";
 import { useTheme } from "@/components/theme-provider";
 import { clampRect, fromRelative, toRelative } from "@/lib/geometry";
 import { CanvasCloseButton } from "./CanvasCloseButton";
@@ -54,7 +54,7 @@ const PASTE_OFFSET = 0.02;
 const SCREEN_STROKE = 1.45;
 const SCREEN_DASH = 5;
 const SCREEN_GAP = 4;
-const SCREEN_LABEL = 18;
+const SCREEN_LABEL = 13;
 const EMPTY_MARKERS: CanvasMarker[] = [];
 const MARKER_LABELS: Record<CanvasMarkerId, string> = {
   tl: "좌상",
@@ -81,6 +81,13 @@ function screenDash(zoom: number) {
   return [SCREEN_DASH * unit, SCREEN_GAP * unit];
 }
 
+function markerLabelY(id: CanvasMarkerId, boxY: number, boxH: number, font: number, gap: number) {
+  if (id === "tl" || id === "tr") {
+    return boxY - font - gap;
+  }
+  return boxY + boxH + gap;
+}
+
 function shouldStartDraw(target: Konva.Node) {
   let node: Konva.Node | null = target;
   while (node) {
@@ -88,7 +95,7 @@ function shouldStartDraw(target: Konva.Node) {
       return false;
     }
     const name = node.name();
-    if (name === "region" || name === "circle" || name === "marker" || name === "circle-delete") {
+    if (name === "region" || name === "circle" || name === "marker" || name === "marker-box" || name === "circle-delete") {
       return false;
     }
     node = node.getParent();
@@ -356,6 +363,37 @@ export function WizardCanvas({
     );
   }
 
+  function syncMarkerLabel(rectNode: Konva.Node, id: CanvasMarkerId) {
+    const group = rectNode.getParent();
+    const label = group?.findOne((item: Konva.Node) => item.name() === "marker-label");
+    if (!label) {
+      return;
+    }
+    const zoom = scaleRef.current || 1;
+    const font = screenPx(SCREEN_LABEL, zoom);
+    const gap = screenPx(3, zoom);
+    const height = Math.abs(rectNode.height() * (rectNode.scaleY() || 1));
+    label.x(rectNode.x());
+    label.y(markerLabelY(id, rectNode.y(), height, font, gap));
+  }
+
+  function commitMarkerGroup(id: CanvasMarkerId, group: Konva.Group) {
+    if (!image || !onMarkersChange) {
+      return;
+    }
+    const box = group.findOne((item: Konva.Node) => item.name() === "marker-box");
+    if (!box) {
+      return;
+    }
+    const rel = toRelFromLayer(
+      group.x() + box.x(),
+      group.y() + box.y(),
+      Math.max(4, box.width() * Math.abs(box.scaleX() || 1)),
+      Math.max(4, box.height() * Math.abs(box.scaleY() || 1)),
+    );
+    onMarkersChange(markerList.map((marker) => (marker.id === id ? { ...marker, ...rel } : marker)));
+  }
+
   useLayoutEffect(() => {
     const transformer = transformerRef.current;
     if (!transformer) {
@@ -582,7 +620,7 @@ export function WizardCanvas({
   const labelSize = screenPx(SCREEN_LABEL, zoom);
   const markerStroke = dark ? "rgba(232, 121, 249, 0.95)" : "rgba(192, 38, 211, 0.92)";
   const markerFill = dark ? "rgba(217, 70, 239, 0.16)" : "rgba(192, 38, 211, 0.12)";
-  const markerText = dark ? "rgba(250, 232, 255, 0.95)" : "rgba(162, 28, 175, 0.92)";
+  const markerText = dark ? "rgba(250, 232, 255, 0.68)" : "rgba(162, 28, 175, 0.62)";
   const regionStroke = dark ? "rgba(251, 113, 133, 0.92)" : "rgba(225, 29, 72, 0.88)";
   const regionFill = regionInteractive ? "rgba(244, 63, 94, 0.14)" : "rgba(244, 63, 94, 0.08)";
   const circleStroke = dark ? "rgba(56, 189, 248, 0.92)" : "rgba(2, 132, 199, 0.88)";
@@ -640,19 +678,13 @@ export function WizardCanvas({
             ? markerList.map((marker) => {
                 const rect = relToLayer(marker, image.width, image.height, originX, originY, fit);
                 const interactive = markerInteractive;
+                const labelGap = screenPx(3, zoom);
                 return (
-                  <Rect
+                  <Group
                     key={marker.id}
-                    id={marker.id}
                     name="marker"
                     x={rect.x}
                     y={rect.y}
-                    width={rect.w}
-                    height={rect.h}
-                    stroke={markerStroke}
-                    strokeWidth={selectedId === marker.id ? selectedStrokeW : strokeW}
-                    dash={dash}
-                    fill={markerFill}
                     listening={interactive}
                     draggable={interactive && Boolean(onMarkersChange)}
                     onMouseDown={(event) => {
@@ -675,33 +707,58 @@ export function WizardCanvas({
                     }}
                     onDragEnd={(event) => {
                       skipClickRef.current = true;
-                      commitNodeRect(marker.id, event.target);
+                      commitMarkerGroup(marker.id, event.target as Konva.Group);
                     }}
-                    onTransformStart={() => {
-                      skipClickRef.current = true;
-                    }}
-                    onTransformEnd={(event) => {
-                      skipClickRef.current = true;
-                      commitNodeRect(marker.id, event.target);
-                    }}
-                  />
-                );
-              })
-            : null}
-          {image
-            ? markerList.map((marker) => {
-                const rect = relToLayer(marker, image.width, image.height, originX, originY, fit);
-                return (
-                  <Text
-                    key={`${marker.id}-label`}
-                    x={rect.x}
-                    y={rect.y - labelSize - screenPx(3, zoom)}
-                    text={MARKER_LABELS[marker.id]}
-                    fill={markerText}
-                    fontSize={labelSize}
-                    fontStyle="bold"
-                    listening={false}
-                  />
+                  >
+                    <Rect
+                      id={marker.id}
+                      name="marker-box"
+                      x={0}
+                      y={0}
+                      width={rect.w}
+                      height={rect.h}
+                      stroke={markerStroke}
+                      strokeWidth={selectedId === marker.id ? selectedStrokeW : strokeW}
+                      dash={dash}
+                      fill={markerFill}
+                      onTransform={() => {
+                        const layer = transformerRef.current?.getLayer();
+                        const node = layer?.findOne((item: Konva.Node) => item.id() === marker.id);
+                        if (node) {
+                          syncMarkerLabel(node, marker.id);
+                        }
+                      }}
+                      onTransformStart={() => {
+                        skipClickRef.current = true;
+                      }}
+                      onTransformEnd={(event) => {
+                        skipClickRef.current = true;
+                        const node = event.target;
+                        const raw = readTransformedRect(node);
+                        const group = node.getParent() as Konva.Group | null;
+                        node.x(0);
+                        node.y(0);
+                        node.width(raw.w);
+                        node.height(raw.h);
+                        if (group) {
+                          group.x(group.x() + raw.x);
+                          group.y(group.y() + raw.y);
+                          syncMarkerLabel(node, marker.id);
+                          commitMarkerGroup(marker.id, group);
+                        }
+                      }}
+                    />
+                    <Text
+                      name="marker-label"
+                      x={0}
+                      y={markerLabelY(marker.id, 0, rect.h, labelSize, labelGap)}
+                      text={MARKER_LABELS[marker.id]}
+                      fill={markerText}
+                      fontSize={labelSize}
+                      fontStyle="bold"
+                      listening={false}
+                    />
+                  </Group>
                 );
               })
             : null}
@@ -825,6 +882,13 @@ export function WizardCanvas({
             anchorFill="#fff"
             anchorStroke={strokeForMode}
             borderStroke={strokeForMode}
+            onTransform={() => {
+              const node = transformerRef.current?.nodes()[0];
+              const id = node?.id();
+              if (node && (id === "tl" || id === "tr" || id === "br" || id === "bl")) {
+                syncMarkerLabel(node, id);
+              }
+            }}
             enabledAnchors={
               selectedId && circles.some((circle) => circle.id === selectedId)
                 ? ["top-left", "top-right", "bottom-left", "bottom-right"]

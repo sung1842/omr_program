@@ -11,17 +11,21 @@ export function selectedLabels(answers: AnswerMap | null | undefined, question: 
   if (!answers) {
     return [];
   }
-  const raw = answers[String(question.number)] ?? answers[question.id];
-  if (raw == null || raw === "") {
+  const raw = answers[String(question.number)] ?? answers[question.id] ?? answers[question.label];
+  if (raw == null || raw === "" || typeof raw === "number") {
     return [];
   }
-  if (Array.isArray(raw)) {
-    return raw.map((item) => String(item)).filter(Boolean);
+  const labels = Array.isArray(raw)
+    ? raw.map((item) => String(item).trim()).filter(Boolean)
+    : String(raw)
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+  if (question.options.length === 0) {
+    return labels;
   }
-  return String(raw)
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const allowed = new Set(question.options.map((option) => option.label));
+  return labels.filter((label) => allowed.has(label));
 }
 
 export function formatSelected(answers: AnswerMap | null | undefined, question: Question) {

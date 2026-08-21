@@ -7,23 +7,24 @@ import {
   formatSelection,
   isExceptionLog,
   isPendingException,
+  questionsFromTemplate,
   reviewActionLabel,
   selectionFromAnswers,
   selectionLimitError,
   toggleSelection,
   type SelectionMap,
 } from "@/lib/exceptionReview";
-import { VILLAGE_AGENDA_FORM } from "@/lib/formSpec";
 import { isPdfPath, signedSheetUrl, removeScanSheet } from "@/lib/sheetStorage";
-import { onScanResultsChanged, emitScanResultsChanged } from "@/lib/scanEvents";
+import { onScanResultsChanged, onTemplatesChanged, emitScanResultsChanged } from "@/lib/scanEvents";
 import { createClient, hasSupabaseConfig } from "@/lib/supabase/client";
-import type { ScanResultRow } from "@/lib/types";
+import type { ScanResultRow, TemplateRow } from "@/lib/types";
 
 type Tab = "queue" | "log";
 
 export function ExceptionPanel({ active = true }: { active?: boolean }) {
   const [tab, setTab] = useState<Tab>("queue");
   const [rows, setRows] = useState<ScanResultRow[]>([]);
+  const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selection, setSelection] = useState<SelectionMap>(selectionFromAnswers(null));
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -39,11 +40,10 @@ export function ExceptionPanel({ active = true }: { active?: boolean }) {
     }
     const gen = ++loadGen.current;
     const supabase = createClient();
-    const { data, error: loadError } = await supabase
-      .from("scan_results")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(10000);
+    const [{ data, error: loadError }, templatesResult] = await Promise.all([
+      supabase.from("scan_results").select("*").order("created_at", { ascending: false }).limit(10000),
+      supabase.from("templates").select("*"),
+    ]);
     if (gen !== loadGen.current) {
       return;
     }
@@ -51,7 +51,12 @@ export function ExceptionPanel({ active = true }: { active?: boolean }) {
       setError(loadError.message);
       return;
     }
+    if (templatesResult.error) {
+      setError(templatesResult.error.message);
+      return;
+    }
     setRows((data ?? []) as ScanResultRow[]);
+    setTemplates((templatesResult.data ?? []) as TemplateRow[]);
   }, []);
 
   useEffect(() => {
@@ -67,6 +72,9 @@ export function ExceptionPanel({ active = true }: { active?: boolean }) {
     const unsubscribe = onScanResultsChanged(() => {
       void load();
     });
+    const unsubscribeTemplates = onTemplatesChanged(() => {
+      void load();
+    });
     const channel = supabase
       .channel("scan-results-exceptions")
       .on("postgres_changes", { event: "*", schema: "public", table: "scan_results" }, () => {
@@ -75,6 +83,7 @@ export function ExceptionPanel({ active = true }: { active?: boolean }) {
       .subscribe();
     return () => {
       unsubscribe();
+      unsubscribeTemplates();
       void supabase.removeChannel(channel);
     };
   }, [load]);
@@ -89,6 +98,10 @@ export function ExceptionPanel({ active = true }: { active?: boolean }) {
   const logs = useMemo(() => rows.filter(isExceptionLog), [rows]);
   const list = tab === "queue" ? pending : logs;
   const selected = list.find((row) => row.id === selectedId) ?? list[0] ?? null;
+  const formQuestions = useMemo(() => {
+    const template = templates.find((row) => row.id === selected?.template_id);
+    return questionsFromTemplate(template);
+  }, [selected?.template_id, templates]);
 
   const viewPath = selected?.source_path ?? selected?.image_path ?? null;
   const isPdf = isPdfPath(viewPath);
@@ -103,16 +116,16 @@ export function ExceptionPanel({ active = true }: { active?: boolean }) {
       return;
     }
     setSelectedId(selected.id);
-    setSelection(selectionFromAnswers(selected.answers));
+    setSelection(selectionFromAnswers(selected.answers, formQuestions));
     if (!hasSupabaseConfig() || !viewPath) {
       setImageUrl(null);
       return;
     }
     const supabase = createClient();
     signedSheetUrl(supabase, viewPath).then(setImageUrl);
-  }, [selected?.id, viewPath, selected?.answers]);
+  }, [selected?.id, viewPath, selected?.answers, formQuestions]);
 
-  const limitError = tab === "queue" ? selectionLimitError(selection) : null;
+  const limitError = tab === "queue" ? selectionLimitError(selection, formQuestions) : null;
 
   async function save(mode: "include" | "exclude") {
     if (!selected || !userId) {
@@ -125,7 +138,7 @@ export function ExceptionPanel({ active = true }: { active?: boolean }) {
     setSaving(true);
     setError(null);
     const supabase = createClient();
-    const answers = answersFromSelection(selection);
+    const answers = answersFromSelection(selection, formQuestions);
     const details =
       selected.details && typeof selected.details === "object"
         ? { ...(selected.details as Record<string, unknown>) }
@@ -311,7 +324,7 @@ export function ExceptionPanel({ active = true }: { active?: boolean }) {
                   void save("include");
                 }}
               >
-                {VILLAGE_AGENDA_FORM.questions.map((question) => {
+                {formQuestions.map((question) => {
                   const chosen = selection[String(question.number)] ?? [];
                   return (
                     <fieldset key={question.number} className="rounded-xl border border-white/10 bg-white/5 p-3">

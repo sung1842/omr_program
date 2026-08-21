@@ -1,6 +1,6 @@
 import { VILLAGE_AGENDA_FORM, type FormQuestionDef } from "@/lib/formSpec";
-import { resultKind, selectedLabels } from "@/lib/results";
-import type { AnswerMap, Question, ScanResultRow } from "@/lib/types";
+import { normalizeQuestion, resultKind, selectedLabels } from "@/lib/results";
+import type { AnswerMap, Question, ScanResultRow, TemplateRow } from "@/lib/types";
 
 export type SelectionMap = Record<string, string[]>;
 
@@ -10,6 +10,28 @@ export function isPendingException(row: ScanResultRow) {
 
 export function isExceptionLog(row: ScanResultRow) {
   return Boolean(row.reviewed_at);
+}
+
+export function questionsFromTemplate(template: Pick<TemplateRow, "questions"> | null | undefined): FormQuestionDef[] {
+  const questions = template?.questions;
+  if (!questions?.length) {
+    return VILLAGE_AGENDA_FORM.questions;
+  }
+  return questions.map((question) => {
+    const normalized = normalizeQuestion(question);
+    return {
+      number: normalized.number,
+      label: normalized.label,
+      type: "multi",
+      min_select: normalized.min_select ?? 0,
+      max_select: normalized.max_select ?? Math.max(1, normalized.options.length),
+      on_overflow: "exception",
+      options: normalized.options.map((option) => ({
+        label: option.label,
+        title: option.title || option.label,
+      })),
+    };
+  });
 }
 
 export function emptySelection(questions: FormQuestionDef[] = VILLAGE_AGENDA_FORM.questions): SelectionMap {
@@ -22,8 +44,21 @@ export function selectionFromAnswers(
 ): SelectionMap {
   const next = emptySelection(questions);
   for (const question of questions) {
-    const stub = { id: `q-${question.number}`, number: question.number, label: question.label, options: [] } as Question;
-    next[String(question.number)] = selectedLabels(answers, stub);
+    const stub = {
+      id: `q-${question.number}`,
+      number: question.number,
+      label: question.label,
+      options: question.options.map((option) => ({
+        id: option.label,
+        label: option.label,
+        x: 0,
+        y: 0,
+        w: 0,
+        h: 0,
+      })),
+    } as Question;
+    const allowed = new Set(question.options.map((option) => option.label));
+    next[String(question.number)] = selectedLabels(answers, stub).filter((label) => allowed.has(label));
   }
   return next;
 }
